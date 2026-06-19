@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "course-ta-deployer"
+version = "1.0.0"
+description = "Linux-first Virtual Teaching Assistant deployment for OpenClaw"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "VTA contributors"}]
+dependencies = [
+  "beautifulsoup4>=4.12",
+  "python-pptx>=0.6.23",
+  "requests>=2.31",
+]
+
+[project.urls]
+Homepage = "https://github.com/zeron-G/VTA"
+Repository = "https://github.com/zeron-G/VTA.git"
+Issues = "https://github.com/zeron-G/VTA/issues"
+
+[project.scripts]
+course-ta-deploy = "course_ta_deployer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["course_ta_deployer*"]
+
+[tool.setuptools.package-data]
+course_ta_deployer = [
+  "skills/course-ta/SKILL.md",
+  "skills/course-ta/lib/*.py",
+  "skills/course-ta/references/*.md",
+]

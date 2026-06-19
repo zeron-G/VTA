@@ -1,0 +1,42 @@
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+auth-profiles.json
+openclaw.json
+
+# OpenClaw and Course TA runtime data
+.openclaw*/
+workspace/
+**/config/
+**/data/
+**/credentials/
+**/logs/
+**/sessions/
+deployment-backups/
+deployment-report.json
+*.jsonl
+
+# Course/student exports
+counts_*.csv
+summary_*.csv
+run_*.json
+discord_participation_count/
+vta_discord_counts/
+
+# Python/build/editor output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+.DS_Store
+.idea/
+.vscode/
