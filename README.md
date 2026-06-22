@@ -62,7 +62,7 @@ VirtualTeachingAssistant uses a different decomposition:
 ## Architecture at a glance
 
 ```mermaid
-flowchart LR
+flowchart TB
     CH["Channel adapter<br/>contract"] --> RQ["TeachingRequest<br/>implemented"]
     RQ --> PE["PolicyEngine<br/>implemented"]
     PE --> CE["CapabilityEnvelope<br/>implemented"]

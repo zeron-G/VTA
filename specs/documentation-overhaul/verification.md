@@ -1,7 +1,7 @@
 # Documentation Overhaul Verification
 
 - [x] README renders with a static-useful, reduced-motion-aware SVG.
-- [ ] Mermaid blocks use supported syntax and include prose equivalents.
+- [x] Mermaid blocks use supported syntax and include prose equivalents.
 - [x] All repository-relative Markdown links resolve.
 - [x] No obsolete repository URL, local absolute path, or secret-like value appears.
 - [x] Documentation claims match source modules and tests.
