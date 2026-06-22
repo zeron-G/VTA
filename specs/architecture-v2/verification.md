@@ -11,4 +11,4 @@
 - [x] Registry tests prove a future channel/activity can be added without changing
   orchestration.
 - [x] Security scan, compileall, package build, and skill validation pass.
-- [ ] GitHub Actions passes on Linux after repository rename.
+- [x] GitHub Actions passes on Linux after repository rename.

@@ -10,4 +10,4 @@
 - [x] Add health supervisor and minimized audit sink
 - [x] Add runtime configuration and CLI diagnostics
 - [x] Add tests, eval fixtures, architecture checks, and CI gates
-- [ ] Rename repository and publish verified changes
+- [x] Rename repository and publish verified changes
