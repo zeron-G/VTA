@@ -16,5 +16,5 @@ app-server`; do not expose its experimental WebSocket listener remotely.
 
 - Codex produces text/tool proposals only.
 - It cannot directly publish, grade, message, or mutate Canvas.
-- The worker process must run in a dedicated Linux sandbox/container before
-  production enablement.
+- The worker process must run in a dedicated OS sandbox/container or equivalent
+  isolated service boundary before production enablement.

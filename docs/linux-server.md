@@ -1,9 +1,13 @@
-# Linux Server Deployment
+# Legacy Linux Server Deployment
+
+This page applies to the current shell/OpenClaw compatibility deployment. The
+V2 Python framework itself is not Linux-specific. See the platform-wide
+[deployment overview](deployment/overview.md).
 
 ## Deployment gate
 
 The repository does not yet contain an institution-approved production stack.
-Do not set `VTA_STAGE=production` merely to bypass pilot controls. Production
+Do not treat `VTA_STAGE=production` as proof that deployment controls exist. Production
 requires closure of the issues under `issues/`, security review, and validation
 in a non-production Carey Canvas/Discord environment.
 

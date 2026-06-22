@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "virtual-teaching-assistant"
 version = "2.0.0"
-description = "Secure, extensible teaching-agent platform for Linux deployments"
+description = "Policy-governed Python framework for extensible teaching agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

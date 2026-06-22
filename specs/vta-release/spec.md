@@ -2,8 +2,8 @@
 
 ## Goal
 
-Publish Virtual Teaching Assistant (VTA) as a public, Linux-first GitHub
-repository containing the deployer and a reusable Course TA skill.
+Publish Virtual Teaching Assistant (VTA) as a public GitHub repository
+containing the original Linux deployment tooling and a reusable Course TA skill.
 
 ## Requirements
 

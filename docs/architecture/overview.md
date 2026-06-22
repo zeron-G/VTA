@@ -1,57 +1,94 @@
-# VirtualTeachingAssistant Architecture
+# Architecture Overview
 
-## Purpose
+## System intent
 
-VirtualTeachingAssistant is a multi-course teaching platform for Carey Business
-School. It normalizes communication channels, applies institutional policy,
-routes read-only reasoning across multiple agent backends, and keeps all side
-effects behind explicit authorization and approval boundaries.
+VirtualTeachingAssistant is a Python framework for policy-governed,
+course-aware teaching agents. It provides a shared domain and orchestration
+model around replaceable channels, skills, agent runtimes, model transports,
+storage, and external action executors.
 
-This repository begins as a modular monolith. Its ports are process-safe and
-network-ready so high-risk components can move into separate services without
-rewriting domain logic.
+The architecture is designed to help professors and students without granting a
+general-purpose LLM direct authority over institutional systems. It supports a
+path from course Q&A toward reviewed recaps, live-class assistance, and classroom
+activities while keeping identity, data policy, approval, and operations outside
+the prompt.
 
-## Trust zones
+The project is a modular monolith today. Deployment operating system is
+orthogonal to the Python architecture; Linux is currently documented for the
+legacy server scripts and remains a likely institutional hosting target.
+
+## Status legend
+
+- **Implemented:** executable V2 code and automated tests exist.
+- **Compatibility:** concrete behavior exists only in `course_ta_deployer`.
+- **Contract only:** typed boundary exists without a complete production adapter.
+- **Target:** planned architecture, not current runtime behavior.
+- **Institutional gate:** depends on Carey/JHU systems or approval.
+
+## Current V2 foundation
+
+```mermaid
+flowchart LR
+    CA["ChannelAdapter<br/>contract only"] --> TR["TeachingRequest<br/>implemented"]
+    TR --> PO["PolicyEngine<br/>implemented"]
+    PO --> OR["FallbackOrchestrator<br/>implemented"]
+    OR --> N["Native<br/>contract only"]
+    OR --> C["Codex CLI<br/>adapter implemented"]
+    OR --> O["OpenClaw client<br/>contract only"]
+    OR --> TS["TeachingService<br/>implemented"]
+    TS --> AU["Minimized audit<br/>implemented"]
+    TS -. proposals .-> AC["Approval coordinator<br/>in-memory"]
+    AC -. approved .-> AE["ActionExecutor<br/>contract only"]
+```
+
+This library flow is not exposed through an HTTP server and is not wired to a V2
+Discord adapter. The concrete Discord/Canvas/OpenClaw behavior remains in the
+compatibility package. See [Current state](current-state.md).
+
+## Target trust zones
+
+Everything in this diagram is a target deployment unless marked as already
+implemented in the current-state inventory.
 
 ```mermaid
 flowchart LR
     subgraph Edge["Edge zone"]
       Discord["Discord adapter"]
-      App["Future Carey app adapter"]
-      Jobs["Scheduled classroom jobs"]
+      App["Future school app / web adapter"]
+      Jobs["Approved scheduled events"]
     end
 
-    subgraph Core["Application zone"]
-      Ingress["Ingress validation + idempotency"]
-      Policy["Policy and academic-integrity engine"]
+    subgraph Core["Python control plane"]
+      Ingress["Authenticated ingress + replay protection"]
+      Policy["Policy + academic-integrity controls"]
       Skills["Skill and activity registry"]
       Router["Agent fallback orchestrator"]
-      Approval["Approval + side-effect executor"]
+      Verify["Response verifier"]
     end
 
-    subgraph Agents["Isolated agent workers"]
-      Native["Native VTA agent"]
-      Codex["Codex read-only worker"]
-      OpenClaw["OpenClaw emergency worker"]
+    subgraph Workers["Isolated worker zone"]
+      Native["Native teaching engine"]
+      Codex["Restricted Codex worker"]
+      OpenClaw["Restricted OpenClaw worker"]
     end
 
-    subgraph LLM["LLM transport boundary"]
-      API["Official Responses API key"]
-      Enterprise["Enterprise Codex access token"]
-      Experimental["Experimental personal OAuth\nnon-production only"]
+    subgraph Effects["Approval and effect zone"]
+      Approval["Human approval service"]
+      CanvasWrite["Canvas executor"]
+      Message["Message executor"]
     end
 
     subgraph Data["Data zone"]
-      Course["Course content index"]
-      State["Conversation + idempotency state"]
-      Audit["Minimized audit events"]
-      Secrets["External secret manager"]
+      Course["Course-scoped content index"]
+      State["Postgres state + outbox"]
+      Audit["Protected audit store"]
+      Secrets["Managed secret service"]
     end
 
-    subgraph Control["Management zone"]
-      Health["Health supervisor"]
-      Metrics["Metrics + alerts"]
-      Admin["Instructor/admin console"]
+    subgraph Ops["Operations zone"]
+      Health["Health/readiness"]
+      Metrics["Metrics + traces + alerts"]
+      Console["Instructor console + kill switch"]
     end
 
     Discord --> Ingress
@@ -61,85 +98,89 @@ flowchart LR
     Router --> Native
     Router --> Codex
     Router --> OpenClaw
-    Native --> API
-    Native -. approved .-> Enterprise
-    Codex --> API
-    Codex -. approved .-> Enterprise
-    OpenClaw --> API
-    Experimental -. development only .-> Router
+    Router --> Verify
+    Verify --> Approval
+    Approval --> CanvasWrite
+    Approval --> Message
     Router --> Course
-    Router --> State
-    Router --> Audit
-    Policy --> Approval
-    Approval --> Course
-    Secrets --> Agents
+    Ingress --> State
+    Approval --> State
+    Ingress --> Audit
+    Approval --> Audit
+    Secrets --> Workers
     Health --> Ingress
-    Health --> Router
-    Health --> LLM
+    Health --> Workers
     Metrics --> Health
-    Admin --> Approval
+    Console --> Approval
 ```
+
+The key trust decision is that agent workers cannot reach side-effect executors
+directly. Approval identity, target validation, idempotency, and reconciliation
+remain deterministic control-plane responsibilities.
 
 ## Core invariants
 
-1. Agent fallback is allowed only for side-effect-free reasoning.
-2. An agent response is a proposal, never authorization to mutate Canvas,
-   publish an announcement, message a class, or change configuration.
-3. Every external event has a tenant, course, actor, channel, request id, data
-   classification, and trace id before it reaches an agent.
-4. Backend failure never broadens tool permissions or data visibility.
-5. Restricted student data is excluded from prompts unless a reviewed use case
-   and an institution-approved provider permit it.
-6. Personal Codex OAuth is not a production service credential.
-7. Raw prompts, tokens, student messages, grades, and rosters are not written to
-   operational logs.
-8. All adapters are replaceable behind typed ports.
+1. Agent fallback is available only for side-effect-free reasoning.
+2. Backend failure may preserve or reduce authority; it may never expand it.
+3. A response or action proposal is not authorization or proof of execution.
+4. Every request is scoped by tenant and course before agent execution.
+5. External content is untrusted data, including Canvas pages, uploads, links,
+   transcripts, model output, and provider errors.
+6. Highly restricted information never enters a general agent prompt.
+7. Personal Codex OAuth is not a production service identity.
+8. Audit minimizes content and identity; operational logs do not become a
+   shadow store of student conversations.
+9. Health checks are bounded and non-mutating.
+10. All provider and runtime integrations remain replaceable behind typed ports.
 
-## Request lifecycle
+## Agent and transport separation
 
-1. A channel adapter verifies provider authenticity and emits a normalized
-   `TeachingRequest`.
-2. Ingress validates sizes, identifiers, replay/idempotency keys, and tenant
-   routing.
-3. Policy computes an immutable capability envelope from role, interaction
-   mode, data class, and deployment environment.
-4. Skills contribute domain instructions and read-only tools within that
-   envelope.
-5. The orchestrator tries `native`, then `codex-cli`, then `openclaw`, skipping
-   disabled or open-circuit backends.
-6. A verifier/policy pass validates the response before channel delivery.
-7. Any requested side effect becomes an approval item with an idempotency key.
-8. Audit records contain hashes, status, timing, backend, and policy result, but
-   no raw student content.
+An agent backend decides how to reason: retrieval, prompt composition, tool
+selection, and response structure. An LLM transport decides how one model call
+is authenticated and sent. They have separate fallback routers because a native
+agent may use the same official model transport as a Codex worker, while a
+transport outage should not redefine agent capabilities.
 
-## Module boundaries
+The intended default agent order is native, Codex, then OpenClaw. The official
+API transport is the production direction. Experimental personal OAuth is
+development-only and rejected by production configuration.
 
-```text
-virtual_teaching_assistant/
-  domain/          Immutable request, response, policy, health, and error types
-  ports/           Agent, channel, LLM, skill, audit, and health protocols
-  orchestration/   Policy, circuit breakers, fallback, and teaching service
-  infrastructure/  Subprocess agents, auth routing, audit, and channel registry
-  activities/      Extensible live class, recap, game, and debate contracts
-  skills/          Trusted skill manifests and registry
-  runtime/         Environment validation and composition
-  api/             Future HTTP/event API boundary
-```
+## Side-effect boundary
 
-The legacy `course_ta_deployer` remains a compatibility and migration module.
-New domain code must not import it.
+Agents can produce `ActionProposal` records. A separate coordinator determines
+approval count, collects distinct approvers, dispatches only to a typed executor,
+and records an external reference. High-risk action types require two people.
 
-## Deployment progression
+The current coordinator and in-memory store demonstrate and test the state
+machine. Production requires institutional approver authentication, durable
+transactions/outbox, crash recovery, executor-specific validation, and provider
+reconciliation.
 
-- **Development:** in-process adapters, fake transports, no student data.
-- **Pilot:** one Linux host, separate service account, Discord + read-only
-  Canvas, official API key, no automated writes.
-- **Controlled production:** reverse proxy, SSO/admin authorization, external
-  secrets, Postgres/Redis, isolated agent workers, metrics/alerts, backup and
-  incident runbooks.
-- **Scale-out:** stateless ingress replicas, durable event/outbox queues,
-  isolated agent worker pools, separate indexing and classroom-live services.
+## Data architecture
 
-Production readiness requires institutional security, privacy, accessibility,
-records-retention, procurement, and legal review. The codebase cannot claim
-FERPA or institutional compliance by itself.
+Current V2 state is process-local except for optional JSONL audit. The target
+design uses:
+
+- course/section namespacing in every key and index;
+- durable provider-event idempotency;
+- Postgres for authoritative workflow/approval/outbox state;
+- object/index storage selected by course-content requirements;
+- managed secrets outside application configuration;
+- protected audit retention with role-limited access;
+- explicit deletion, backup, and restoration policy.
+
+Redis or a queue should be added only when concurrency/load requirements justify
+it; it is not an architectural prerequisite for correctness.
+
+## Evolution path
+
+1. Complete institution-neutral V2 ingress, storage, adapters, native-engine
+   skeleton, isolation, and observability using synthetic data.
+2. Build approved teaching-quality, safety, robustness, cost, and latency evals.
+3. Complete institutional identity, privacy, accessibility, vendor, operations,
+   and incident-readiness gates.
+4. Run one reversible read-only course pilot.
+5. Add reviewed recap/activity/effect workflows one at a time.
+
+See [Roadmap](../roadmap.md) for exit criteria and [ADRs](../adr/) for accepted
+decisions.

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">VirtualTeachingAssistant system flow</title>
+  <desc id="desc">A Python teaching-agent platform routes channel requests through policy and skills to native, Codex, or OpenClaw agent backends. Side effects use a separate approval boundary.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08111f"/>
+      <stop offset="0.55" stop-color="#10233d"/>
+      <stop offset="1" stop-color="#081827"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#55d6be"/>
+      <stop offset="1" stop-color="#69a7ff"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; }
+      .label { fill: #e7f1ff; font-size: 17px; font-weight: 600; }
+      .small { fill: #9fb4cf; font-size: 13px; font-weight: 500; }
+      .title { fill: #f4f8ff; font-size: 38px; font-weight: 700; letter-spacing: .3px; }
+      .subtitle { fill: #a9bdd6; font-size: 16px; font-weight: 500; }
+      .box { fill: #102a44; stroke: #385a79; stroke-width: 1.5; }
+      .core { fill: #12354a; stroke: #55d6be; stroke-width: 2; }
+      .agent { fill: #152b4c; stroke: #69a7ff; stroke-width: 1.6; }
+      .approval { fill: #3b2739; stroke: #e7a6cf; stroke-width: 1.6; }
+      .path { fill: none; stroke: #476784; stroke-width: 2; }
+      .pulse { fill: none; stroke: #70e5cf; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 8 190; filter: url(#glow); animation: flow 4s linear infinite; }
+      .pulse.second { animation-delay: -2s; stroke: #77b0ff; }
+      @keyframes flow { to { stroke-dashoffset: -198; } }
+      @media (prefers-reduced-motion: reduce) { .pulse { animation: none; stroke-dasharray: none; opacity: .55; } }
+    </style>
+  </defs>
+
+  <rect width="1200" height="380" rx="22" fill="url(#background)"/>
+  <rect x="34" y="28" width="7" height="67" rx="3.5" fill="url(#brand)"/>
+  <text x="62" y="59" class="title">VirtualTeachingAssistant</text>
+  <text x="62" y="87" class="subtitle">A policy-governed Python framework for extensible teaching agents</text>
+
+  <path class="path" d="M192 221 H290"/>
+  <path class="path" d="M468 221 H562"/>
+  <path class="path" d="M724 186 C780 186 780 153 826 153"/>
+  <path class="path" d="M724 221 H826"/>
+  <path class="path" d="M724 256 C780 256 780 289 826 289"/>
+  <path class="path" d="M643 274 V331 H930"/>
+  <path class="pulse" d="M192 221 H290 M468 221 H562 M724 221 H826"/>
+  <path class="pulse second" d="M724 186 C780 186 780 153 826 153 M724 256 C780 256 780 289 826 289"/>
+
+  <g>
+    <rect class="box" x="48" y="174" width="144" height="94" rx="13"/>
+    <text class="label" x="120" y="208" text-anchor="middle">Channels</text>
+    <text class="small" x="120" y="231" text-anchor="middle">Discord compatibility</text>
+    <text class="small" x="120" y="249" text-anchor="middle">future app adapters</text>
+  </g>
+  <g>
+    <rect class="core" x="290" y="166" width="178" height="110" rx="13"/>
+    <text class="label" x="379" y="203" text-anchor="middle">Policy Core</text>
+    <text class="small" x="379" y="226" text-anchor="middle">role + mode + data class</text>
+    <text class="small" x="379" y="247" text-anchor="middle">immutable capabilities</text>
+  </g>
+  <g>
+    <rect class="core" x="562" y="166" width="162" height="110" rx="13"/>
+    <text class="label" x="643" y="203" text-anchor="middle">Agent Router</text>
+    <text class="small" x="643" y="226" text-anchor="middle">timeouts + circuits</text>
+    <text class="small" x="643" y="247" text-anchor="middle">monotonic fallback</text>
+  </g>
+  <g>
+    <rect class="agent" x="826" y="119" width="162" height="68" rx="12"/>
+    <text class="label" x="907" y="148" text-anchor="middle">Native Agent</text>
+    <text class="small" x="907" y="168" text-anchor="middle">engine contract</text>
+  </g>
+  <g>
+    <rect class="agent" x="826" y="198" width="162" height="68" rx="12"/>
+    <text class="label" x="907" y="227" text-anchor="middle">Codex Worker</text>
+    <text class="small" x="907" y="247" text-anchor="middle">restricted adapter</text>
+  </g>
+  <g>
+    <rect class="agent" x="826" y="277" width="162" height="68" rx="12"/>
+    <text class="label" x="907" y="306" text-anchor="middle">OpenClaw</text>
+    <text class="small" x="907" y="326" text-anchor="middle">emergency boundary</text>
+  </g>
+  <g>
+    <rect class="approval" x="1008" y="198" width="154" height="68" rx="12"/>
+    <text class="label" x="1085" y="227" text-anchor="middle">Approval</text>
+    <text class="small" x="1085" y="247" text-anchor="middle">separate executor</text>
+  </g>
+  <path class="path" d="M988 232 H1008" stroke-dasharray="5 5"/>
+
+  <text x="48" y="344" class="small">Agents produce answers and proposals. They do not authorize their own side effects.</text>
+</svg>

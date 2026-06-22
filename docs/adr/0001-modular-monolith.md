@@ -18,4 +18,5 @@ tractable for the pilot.
 
 - Domain and orchestration modules cannot import vendor adapters.
 - High-risk workers can be separated before the rest of the core.
-- Persistent production state will later require Postgres/Redis adapters.
+- Persistent production state will require reviewed durable storage and queue/
+  outbox adapters; specific infrastructure follows correctness and measured load.
