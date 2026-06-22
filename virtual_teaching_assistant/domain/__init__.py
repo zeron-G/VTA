@@ -1,0 +1,53 @@
+"""Domain types with no infrastructure dependencies."""
+
+from .errors import (
+    BackendFailure,
+    ConfigurationError,
+    FailureCategory,
+    NoBackendAvailable,
+    PolicyDenied,
+    TransportFailure,
+    VTAError,
+)
+from .models import (
+    ActionProposal,
+    ActorRole,
+    AgentAttempt,
+    AgentResult,
+    AgentTier,
+    ApprovalRecord,
+    ApprovalStatus,
+    Capability,
+    CapabilityEnvelope,
+    DataClassification,
+    HealthReport,
+    HealthStatus,
+    InteractionMode,
+    TeachingRequest,
+    TeachingResponse,
+)
+
+__all__ = [
+    "BackendFailure",
+    "ActionProposal",
+    "ActorRole",
+    "AgentAttempt",
+    "AgentResult",
+    "AgentTier",
+    "ApprovalRecord",
+    "ApprovalStatus",
+    "Capability",
+    "CapabilityEnvelope",
+    "ConfigurationError",
+    "DataClassification",
+    "FailureCategory",
+    "HealthReport",
+    "HealthStatus",
+    "InteractionMode",
+    "NoBackendAvailable",
+    "PolicyDenied",
+    "TeachingRequest",
+    "TeachingResponse",
+    "TransportFailure",
+    "VTAError",
+]

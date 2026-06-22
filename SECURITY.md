@@ -1,25 +1,31 @@
 # Security Policy
 
+## Production status
+
+VirtualTeachingAssistant is not approved for real Carey student data. A pilot
+requires institutional identity/RBAC, managed secrets, durable encrypted state,
+data-retention rules, privacy and accessibility review, incident response, and
+an approved evaluation corpus. The tracked gaps are in [`issues/`](issues/).
+
 ## Never commit runtime data
 
-Do not commit or upload:
+Do not commit or upload environment files, credentials, OAuth/session state,
+course materials, Canvas caches, rosters, grades, accommodations, student
+identifiers, Discord exports, model transcripts, audit logs, or backups.
 
-- `.env` or any completed environment file.
-- Canvas, Discord, OpenAI, Codex OAuth, or gateway credentials.
-- `openclaw.json`, `auth-profiles.json`, cookies, or session state.
-- Course materials, Canvas sync caches, rosters, grades, student identifiers,
-  Discord exports, interaction logs, or deployment backups.
+The repository ignores common runtime locations and CI runs
+`scripts/security_scan.py`. Those are guardrails, not authorization to place
+sensitive data in the working tree.
 
-The repository ignores common runtime locations, and CI runs
-`scripts/security_scan.py`. These controls are guardrails, not permission to
-store sensitive data in the working tree.
+## Credential and worker rules
 
-## Credential handling
-
-Use the least-privileged Canvas token possible. Restrict the Discord bot to the
-configured guild and explicit channels. Keep environment and profile files
-owner-readable only. OpenClaw must manage its own OAuth refresh tokens; VTA does
-not copy or export them.
+- Use a dedicated, least-privileged service identity and external secret store.
+- Do not copy personal Codex OAuth state to a shared server.
+- Do not run Codex with `--yolo`, `danger-full-access`, or inherited user config.
+- Run Codex and OpenClaw in separate non-root workers with network/filesystem
+  allowlists before enabling either in production.
+- Restrict Canvas scopes and Discord guild/channel allowlists per course.
+- Keep side-effect execution outside all agent workers and require approval.
 
 If a credential is exposed, revoke and rotate it immediately, remove it from
 Git history, and review provider audit logs. Deleting the latest file is not
@@ -27,9 +33,7 @@ sufficient after a push.
 
 ## Reporting
 
-Do not open a public issue containing a vulnerability exploit, credential,
-student record, or production log. Use GitHub's private vulnerability reporting
-for the repository when available.
-
-Include only redacted health-check output, VTA/OpenClaw versions, operating
-system details, and minimal reproduction steps.
+Use GitHub private vulnerability reporting. Do not open a public issue with an
+exploit, credential, student record, prompt transcript, or production log.
+Include only redacted diagnostics, versions, and a minimal synthetic
+reproduction.

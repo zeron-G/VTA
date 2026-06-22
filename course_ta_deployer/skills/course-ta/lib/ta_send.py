@@ -102,7 +102,10 @@ def main() -> int:
         headers={
             "Authorization": f"Bot {token}",
             "Content-Type": "application/json",
-            "User-Agent": "VTA/1.0 (https://github.com/zeron-G/VTA)",
+            "User-Agent": (
+                "VirtualTeachingAssistant/2.0 "
+                "(https://github.com/zeron-G/VirtualTeachingAssistant)"
+            ),
         },
         method="POST",
     )

@@ -167,13 +167,13 @@ class HealthChecker:
         return f"exit={result.returncode}" + (f"; {self._bounded(output)}" if output else "")
 
     def check_local(self) -> None:
-        python_ok = sys.version_info >= (3, 10)
+        python_ok = sys.version_info >= (3, 11)
         self.add(
             "runtime",
             "Python",
             "ok" if python_ok else "failed",
             f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            remediation=None if python_ok else "Install Python 3.10 or newer.",
+            remediation=None if python_ok else "Install Python 3.11 or newer.",
         )
 
         node = self.runner.which("node")

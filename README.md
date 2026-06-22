@@ -1,130 +1,120 @@
-# Virtual Teaching Assistant (VTA)
+# VirtualTeachingAssistant
 
-VTA is a Linux-first deployment package for a Discord course teaching
-assistant powered by [OpenClaw](https://github.com/openclaw/openclaw). It
-bundles the reusable `course-ta` skill and configures Canvas, Discord, model
-authentication, course-material indexing, and the OpenClaw gateway.
+VirtualTeachingAssistant is a Linux-first, security-oriented teaching-agent
+platform intended for evaluation at the Johns Hopkins Carey Business School.
+It supports course Q&A today and defines extension contracts for live-class
+analysis, post-class recaps, classroom activities, and future communication
+channels.
 
-The repository contains source code and placeholder configuration only. It does
-not contain production logs, course materials, student data, OAuth tokens,
-Canvas tokens, Discord tokens, or an OpenClaw runtime profile.
+This repository is an engineering foundation, not an institution-approved
+production service. Real student data must not be used until identity, privacy,
+accessibility, records-retention, security, and operational reviews are closed.
 
-## What is included
+## Implemented foundation
 
-- A Python CLI for repeatable, isolated OpenClaw profile deployment.
-- The sanitized and reusable `course-ta` skill as wheel package data.
-- Automatic installation of the official OpenClaw npm package.
-- Codex OAuth, OpenAI API-key, or existing-profile authentication modes.
-- Canvas initial sync and local RAG indexing.
-- Discord guild/channel allowlists with mention gating.
-- Read-only `check` probes for dependencies, OAuth/model access, Canvas course
-  access, Discord routing, gateway status, and memory indexing.
+- Immutable request, capability, data-classification, and response contracts.
+- Role- and mode-based policy that removes every agent side effect.
+- Ordered `native -> codex-cli -> openclaw` fallback with timeouts, circuit
+  breakers, and permission-monotonic degradation.
+- Official OpenAI Responses API transport with `store=false` and credential
+  failover controls.
+- Development-only adapter for `zeron-G/codex_oauth`; production configuration
+  rejects personal OAuth fallback.
+- Restricted Codex CLI adapter using stdin, an ephemeral session, read-only
+  sandbox, ignored user configuration, and no `--yolo` mode.
+- Separate approval/execution state machine. Grades, enrollment, assessment
+  publication, and bulk messaging require two distinct approvers.
+- Extensible channel, skill, activity, agent, LLM, audit, and health ports.
+- Minimized HMAC audit events, bounded health probes, and redacted diagnostics.
+- A platform-first `course-ta` skill that treats retrieved content as untrusted
+  and emits proposals instead of directly writing Canvas or Discord.
+- The original OpenClaw deployment/check CLI as a migration compatibility layer.
 
-OpenClaw itself is not copied into this repository. VTA installs the official
-`openclaw@2026.6.8` package from npm, whose published metadata points to the
-official OpenClaw GitHub repository. See [Third-party software](THIRD_PARTY.md).
+## Safety invariants
 
-## Linux requirements
+1. An agent may reason and draft, but it may never perform a side effect.
+2. Fallback may preserve or reduce authority; it may never add authority.
+3. Invalid, policy-denied, and content-safety failures do not trigger fallback.
+4. Highly restricted records never enter an agent request.
+5. Raw prompts, actor identifiers, tokens, and model output are absent from
+   platform audit records.
+6. Production rejects experimental personal OAuth and unisolated Codex/OpenClaw
+   workers at configuration time.
 
-- A current Linux distribution with `bash`.
-- Python 3.10 or newer with the `venv` module.
-- Node.js 22.19 or newer and npm.
-- A Discord bot token and server/channel IDs.
-- A Canvas HTTPS base URL, course ID, and access token with the least privileges
-  required for the course.
-- Codex OAuth access or an OpenAI API key.
+See [architecture](docs/architecture/overview.md), [threat model](docs/architecture/threat-model.md),
+and [architecture decisions](docs/adr/) for the full design.
 
-Use a non-root service account. Ensure its npm global prefix is writable before
-deployment; VTA never runs `curl | sh` or elevates itself with `sudo`.
+## Local engineering setup
 
-## Quick deployment
+Requires Python 3.11 or newer.
 
 ```bash
-git clone https://github.com/zeron-G/VTA.git
-cd VTA
-chmod +x deploy.sh check.sh
-./deploy.sh
+git clone https://github.com/zeron-G/VirtualTeachingAssistant.git
+cd VirtualTeachingAssistant
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+virtual-ta architecture
+virtual-ta self-check
 ```
 
-The first run creates an owner-only `.env` from `.env.example` and stops. Edit
-every `REPLACE_ME` value, then deploy:
+`virtual-ta self-check` is deliberately local and non-networked. The legacy
+deployment doctor performs read-only Canvas, Discord, OpenClaw, and model
+connectivity probes:
 
 ```bash
+cp .env.example .env
 chmod 600 .env
-./deploy.sh --yes
-```
-
-The script creates `.venv`, installs VTA and its Python dependencies, installs
-the pinned OpenClaw npm package when missing, installs the bundled skill into an
-isolated profile, performs the initial Canvas sync, indexes memory, and installs
-the gateway when enabled.
-
-Run the full read-only health check:
-
-```bash
+./deploy.sh --dry-run
 ./check.sh
 ```
 
-Run only local checks:
+Never use placeholder credentials outside a disposable test environment. Read
+[Linux deployment](docs/linux-server.md) before operating the compatibility
+layer.
 
-```bash
-./check.sh --offline
-```
+## Authentication
 
-## CLI
+Production should use a dedicated official OpenAI API key or an approved
+enterprise service identity stored in an external secrets manager. Failover is
+limited to authentication, rate-limit, timeout, availability, and internal
+transport failures.
 
-```bash
-course-ta-deploy --env-file /secure/path/vta.env plan
-course-ta-deploy --env-file /secure/path/vta.env deploy --yes
-course-ta-deploy --env-file /secure/path/vta.env check
-course-ta-deploy --env-file /secure/path/vta.env check --offline
-course-ta-deploy print-env
-```
-
-`check` emits JSON with `ok`, `failed`, and `skipped` states. Canvas and Discord
-connectivity checks use only HTTP GET requests. The model probe is a real
-OpenClaw provider request limited to one output token.
-
-## Authentication modes
-
-- `codex-oauth`: starts OpenClaw's official `openai-codex` login and lets
-  OpenClaw own refresh-token storage.
-- `openai-api-key`: reads `OPENAI_API_KEY` and stores it only in the target
-  profile's owner-only environment file.
-- `existing`: uses authentication already present in the isolated profile.
-
-VTA never copies Codex OAuth files, browser cookies, or tokens from another
-profile.
+[`zeron-G/codex_oauth`](https://github.com/zeron-G/codex_oauth) accesses an
+unsupported ChatGPT Codex backend with a local interactive sign-in cache. Its
+own documentation limits it to local prototypes. VTA therefore marks this
+transport `production_allowed = false` and rejects it in production.
 
 ## Repository layout
 
 ```text
-course_ta_deployer/                 Python deployment CLI
-course_ta_deployer/skills/course-ta Bundled OpenClaw skill
-docs/                               Linux and external-link documentation
-scripts/security_scan.py            Pre-publish secret/privacy scanner
-tests/                              Unit tests with fake credentials only
+virtual_teaching_assistant/         V2 domain, ports, orchestration, adapters
+course_ta_deployer/                 Legacy OpenClaw deployment compatibility
+course_ta_deployer/skills/course-ta Bundled teaching policy skill
+docs/architecture/                  System design and threat model
+docs/adr/                           Architecture decisions
+docs/runbooks/                      Failure and operations guidance
+specs/architecture-v2/              Scope, plan, tasks, and evidence
+evals/                              Synthetic safety contract only
+issues/                             Explicit production-readiness backlog
+tests/                              Unit and architecture regression tests
 ```
 
-Generated `config/`, `data/`, logs, course caches, Discord exports, and
-credentials are runtime artifacts and are intentionally absent and gitignored.
-
-## Validation
+## Verification
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q course_ta_deployer tests scripts
-python3 scripts/security_scan.py .
-python3 -m build
+python -m unittest discover -s tests -v
+python -m compileall -q virtual_teaching_assistant course_ta_deployer tests scripts
+python scripts/check_architecture.py
+python scripts/validate_evals.py
+python scripts/security_scan.py .
+python -m build
 ```
 
-## Security
-
-Read [SECURITY.md](SECURITY.md) before operating VTA with real student or
-credential data. Never attach `.env`, an OpenClaw state directory, Canvas sync
-cache, or logs to a public issue.
+No production logs, course materials, student records, OAuth tokens, Canvas
+tokens, Discord tokens, or OpenClaw runtime profiles belong in this repository.
+See [Security](SECURITY.md) and [Third-party software](THIRD_PARTY.md).
 
 ## License
 
-VTA is licensed under the [MIT License](LICENSE). Third-party packages retain
-their own licenses.
+[MIT](LICENSE). Third-party components retain their own licenses.

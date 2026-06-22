@@ -3,34 +3,37 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "course-ta-deployer"
-version = "1.0.0"
-description = "Linux-first Virtual Teaching Assistant deployment for OpenClaw"
+name = "virtual-teaching-assistant"
+version = "2.0.0"
+description = "Secure, extensible teaching-agent platform for Linux deployments"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "VTA contributors"}]
 dependencies = [
   "beautifulsoup4>=4.12",
+  "openai>=2.43.0,<3",
   "python-pptx>=0.6.23",
   "requests>=2.31",
 ]
 
 [project.urls]
-Homepage = "https://github.com/zeron-G/VTA"
-Repository = "https://github.com/zeron-G/VTA.git"
-Issues = "https://github.com/zeron-G/VTA/issues"
+Homepage = "https://github.com/zeron-G/VirtualTeachingAssistant"
+Repository = "https://github.com/zeron-G/VirtualTeachingAssistant.git"
+Issues = "https://github.com/zeron-G/VirtualTeachingAssistant/issues"
 
 [project.scripts]
 course-ta-deploy = "course_ta_deployer.cli:main"
+virtual-ta = "virtual_teaching_assistant.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["course_ta_deployer*"]
+include = ["course_ta_deployer*", "virtual_teaching_assistant*"]
 
 [tool.setuptools.package-data]
 course_ta_deployer = [
   "skills/course-ta/SKILL.md",
+  "skills/course-ta/skill.json",
   "skills/course-ta/lib/*.py",
   "skills/course-ta/references/*.md",
 ]

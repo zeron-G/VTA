@@ -1,6 +1,7 @@
 # Repository Instructions
 
-- Keep VTA Linux-first and compatible with Python 3.10+ and Node.js 22.19+.
+- Keep VirtualTeachingAssistant Linux-first and compatible with Python 3.11+
+  and Node.js 22.19+ where the legacy OpenClaw deployer is used.
 - Treat the bundled `course-ta` skill as a versioned prompt and tool contract.
 - Never add runtime profiles, credentials, logs, course material, student data,
   real Discord IDs, or institution-specific configuration.

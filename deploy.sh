@@ -6,12 +6,12 @@ ENV_FILE="${COURSE_TA_ENV_FILE:-$SCRIPT_DIR/.env}"
 VENV_DIR="${VTA_VENV_DIR:-$SCRIPT_DIR/.venv}"
 
 command -v python3 >/dev/null 2>&1 || {
-  echo "ERROR: Python 3.10 or newer is required." >&2
+  echo "ERROR: Python 3.11 or newer is required." >&2
   exit 2
 }
 
-python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' || {
-  echo "ERROR: Python 3.10 or newer is required." >&2
+python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' || {
+  echo "ERROR: Python 3.11 or newer is required." >&2
   exit 2
 }
 

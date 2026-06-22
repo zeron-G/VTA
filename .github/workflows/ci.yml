@@ -20,7 +20,11 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Compile
-        run: python -m compileall -q course_ta_deployer tests scripts
+        run: python -m compileall -q virtual_teaching_assistant course_ta_deployer tests scripts
+      - name: Architecture boundaries
+        run: python scripts/check_architecture.py
+      - name: Evaluation fixture contract
+        run: python scripts/validate_evals.py
       - name: Release security scan
         run: python scripts/security_scan.py .
       - name: Build distribution

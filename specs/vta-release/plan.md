@@ -6,4 +6,4 @@
 4. Run tests, compile, build, inspect package contents, and scan for sensitive
    data.
 5. Initialize Git, commit the audited release, create public GitHub repository
-   `VTA`, and push the default branch.
+   `VirtualTeachingAssistant`, and push the default branch.

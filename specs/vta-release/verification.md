@@ -20,6 +20,6 @@
 - Wheel contains 33 members including the bundled skill and zero forbidden
   runtime directories/files.
 - A clean temporary wheel installation resolved the skill from `site-packages`.
-- GitHub repository `zeron-G/VTA` was created with `PUBLIC` visibility and
+- GitHub repository `zeron-G/VirtualTeachingAssistant` has `PUBLIC` visibility and
   `main` as the default branch.
 - GitHub private vulnerability reporting was enabled.

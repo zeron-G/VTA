@@ -1,0 +1,22 @@
+{
+  "id": "course-ta",
+  "version": "2.1.0",
+  "entrypoint": "SKILL.md",
+  "trusted": true,
+  "max_data_classification": "INTERNAL",
+  "modes": [
+    "question_answer",
+    "live_class",
+    "post_class_recap",
+    "activity"
+  ],
+  "capabilities": [
+    "reason",
+    "course.read",
+    "canvas.read",
+    "response.draft",
+    "live.analyze",
+    "recap.draft",
+    "activity.participate"
+  ]
+}
