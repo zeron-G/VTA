@@ -7,4 +7,4 @@
 - [x] Documentation claims match source modules and tests.
 - [x] `python -m unittest discover -s tests -v` passes.
 - [x] Architecture, eval, compile, security, and package build gates pass.
-- [ ] GitHub Actions passes on the pull request and merged `main` commit.
+- [x] GitHub Actions passes on the pull request and merged `main` commit.

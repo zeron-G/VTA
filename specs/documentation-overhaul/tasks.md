@@ -7,4 +7,4 @@
 - [x] Correct package metadata and governance wording
 - [x] Add and test local Markdown link validation
 - [x] Run full verification and inspect public diff
-- [ ] Publish, pass GitHub Actions, and merge
+- [x] Publish, pass GitHub Actions, and merge
