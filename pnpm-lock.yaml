@@ -96,6 +96,25 @@ importers:
         specifier: ^6.1.3
         version: 6.1.3
 
+  packages/governance:
+    dependencies:
+      '@vta/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@vta/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@vta/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      rimraf:
+        specifier: ^6.1.3
+        version: 6.1.3
+
   packages/llm:
     dependencies:
       '@earendil-works/pi-ai':
@@ -152,6 +171,28 @@ importers:
       '@vta/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      rimraf:
+        specifier: ^6.1.3
+        version: 6.1.3
+
+  packages/tools:
+    dependencies:
+      '@vta/data':
+        specifier: workspace:*
+        version: link:../data
+      '@vta/rag':
+        specifier: workspace:*
+        version: link:../rag
+      '@vta/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.0)(@types/pg@8.20.0)(pg@8.22.0)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
