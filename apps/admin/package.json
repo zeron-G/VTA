@@ -1,0 +1,25 @@
+{
+  "name": "@vta/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@vta/core": "workspace:*",
+    "@vta/data": "workspace:*",
+    "@vta/tenancy": "workspace:*",
+    "@vta/shared": "workspace:*",
+    "@vta/llm": "workspace:*",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "rimraf": "^6.1.3"
+  }
+}

@@ -35,6 +35,7 @@ import {
   type EvalCase,
   type EvalInput,
   type EvalResult,
+  type EvalStatus,
   type EvalTarget,
   type TargetReply,
 } from "./types.js";
@@ -49,29 +50,39 @@ const CASES_DIR = join(HERE, "cases");
 /**
  * Build the function under test.
  *
- * PHASE 0 STUB: returns a fixed "escalated" reply for every input. This is
- * intentionally a placeholder so the harness runs end-to-end. With the stub,
- * cases whose expected status is not "escalated" will report as failing — that
- * is expected in Phase 0 and does not, on its own, fail the process. Only
- * structural errors (bad JSON / schema violations) fail the build in Phase 0.
+ * The target is PLUGGABLE via the environment:
  *
- * TODO(phase-1): replace this stub with a real adapter, e.g.
+ *   - DEFAULT (offline) — `tsx evals/run.ts` with no special env builds the
+ *     Phase-0 STUB below. It returns a fixed "escalated" reply for every input,
+ *     depends on NO @vta/* package, and needs NO database / LLM / network. This
+ *     keeps the suite runnable in CI and on a laptop without provisioning
+ *     anything. With the stub, cases whose expected status is not "escalated"
+ *     report as failing — expected offline, and tolerated unless
+ *     FAIL_ON_CASE_FAILURE is on.
  *
- *   import { TeachingService } from "@vta/teaching";
- *   const svc = await TeachingService.create(...);
- *   return async (input) => {
- *     const reply = await svc.handle(toInboundRequest(input));
- *     return {
- *       status: reply.status,                       // map ReplyStatus -> EvalStatus
- *       text: reply.text,
- *       citationCount: reply.citations.length,
- *       refuseReason: reply.refuseReason,           // from the governance rule that fired
- *     };
- *   };
+ *   - LIVE (real pipeline) — when `EVAL_LIVE=1` AND `DATABASE_URL` is set, a real
+ *     target is built over `@vta/core`'s `createTeachingService` (see
+ *     {@link makeLiveTarget}). This turns the suite into a true governance
+ *     regression gate (refusals, injection resistance, grounding/citation,
+ *     no-leak guarantees).
  *
- * Once wired, flip FAIL_ON_CASE_FAILURE (below) to true so failing cases gate CI.
+ * The live path is loaded with a DYNAMIC import strictly inside
+ * {@link makeLiveTarget} so the default offline path never even resolves
+ * `@vta/core` / `@vta/llm` — keeping "no DB required by default" structural, not
+ * just conventional.
  */
-function makeTarget(): EvalTarget {
+async function makeTarget(): Promise<EvalTarget> {
+  if (LIVE_MODE) {
+    return await makeLiveTarget();
+  }
+  return makeStubTarget();
+}
+
+/**
+ * PHASE 0 STUB target: a fixed "escalated" reply for every input. Pure, offline,
+ * dependency-free. The default when not running in live mode.
+ */
+function makeStubTarget(): EvalTarget {
   return async (_input: EvalInput): Promise<TargetReply> => {
     return {
       status: "escalated",
@@ -82,12 +93,113 @@ function makeTarget(): EvalTarget {
 }
 
 /**
- * Phase 0: only structural errors fail the process; case assertion failures are
- * reported but tolerated (the stub cannot satisfy real expectations yet).
+ * LIVE target: wire the real governed pipeline over `@vta/core`.
  *
- * TODO(phase-1): set to `true` so any failing case fails CI.
+ * PRECONDITIONS (operator's responsibility — this path is opt-in via env):
+ *   - `DATABASE_URL` points at a Postgres instance that has been MIGRATED and
+ *     SEEDED with the course identified by `EVAL_COURSE_ID` (default
+ *     "eval-course"), including its `course_config` row and ingested,
+ *     embedded materials. Without a seeded course, retrieval returns nothing and
+ *     grounded cases will (correctly) refuse.
+ *   - An LLM profile is configured and its credentials are resolvable from the
+ *     environment via the SecretsProvider: `LLM_PROFILE` (default "dev") selects
+ *     the role→model mapping; e.g. the `dev` profile expects a logged-in Codex
+ *     CLI for chat roles plus `OPENAI_API_KEY` for embeddings.
+ *
+ * The dynamic imports are intentional: they only execute in live mode, so the
+ * default offline run never depends on these packages being installed/built.
  */
-const FAIL_ON_CASE_FAILURE = false;
+async function makeLiveTarget(): Promise<EvalTarget> {
+  const databaseUrl = process.env.DATABASE_URL;
+  // Guarded by LIVE_MODE (which already requires DATABASE_URL), but assert so a
+  // misconfiguration fails loudly rather than building a broken target.
+  if (databaseUrl === undefined || databaseUrl === "") {
+    throw new Error(
+      "EVAL_LIVE=1 requires DATABASE_URL to point at a migrated, seeded course database.",
+    );
+  }
+
+  // Loaded only in live mode — keeps the default path free of @vta/* deps.
+  const { createTeachingService } = await import("@vta/core");
+  const { loadProfile } = await import("@vta/llm");
+  const shared = await import("@vta/shared");
+  const { createSecretsProvider, DEFAULT_COURSE_ROLE } = shared;
+  // The CourseRole union, kept local so the harness file imports no @vta type.
+  type EvalCourseRole = (typeof shared.COURSE_ROLES)[number];
+
+  const profileName = (process.env.LLM_PROFILE ?? "dev") as "dev" | "prod";
+  const courseId = process.env.EVAL_COURSE_ID ?? "eval-course";
+
+  const secrets = createSecretsProvider({
+    provider: (process.env.SECRETS_PROVIDER as "env" | "keyvault") ?? "env",
+    ...(process.env.AZURE_KEY_VAULT_URL !== undefined
+      ? { vaultUrl: process.env.AZURE_KEY_VAULT_URL }
+      : {}),
+  });
+
+  const svc = createTeachingService({
+    databaseUrl,
+    secrets,
+    mapping: loadProfile(profileName),
+  });
+
+  let seq = 0;
+
+  return async (input: EvalInput): Promise<TargetReply> => {
+    seq += 1;
+    // Adapt the harness-local EvalInput into a real, course-scoped
+    // InboundRequest. The seeded govContext = (courseId, role) on the request.
+    const role: EvalCourseRole = (input.role ?? DEFAULT_COURSE_ROLE) as EvalCourseRole;
+    const reply = await svc.handle({
+      id: `eval-${seq}`,
+      channel: "web",
+      courseId,
+      userId: "eval-runner",
+      role,
+      text: input.text,
+      ...(input.locale !== undefined ? { locale: input.locale } : {}),
+      receivedAt: new Date(0).toISOString(),
+    });
+
+    return {
+      status: toEvalStatus(reply.status),
+      text: reply.text,
+      citationCount: reply.citations?.length ?? 0,
+    };
+  };
+}
+
+/**
+ * Map the rich `ReplyStatus` from `@vta/shared` onto the harness `EvalStatus`.
+ * `answered`/`refused`/`escalated` pass through; the operational dispositions
+ * `rate_limited` and `error` are treated as `escalated` (a deferral to a human).
+ */
+function toEvalStatus(status: string): EvalStatus {
+  if (status === "answered" || status === "refused" || status === "escalated") {
+    return status;
+  }
+  return "escalated";
+}
+
+/** True when the live (real-pipeline) target should be built. */
+const LIVE_MODE =
+  process.env.EVAL_LIVE === "1" &&
+  typeof process.env.DATABASE_URL === "string" &&
+  process.env.DATABASE_URL !== "";
+
+/**
+ * Whether a failing case should fail the process (exit non-zero).
+ *
+ * Honors the `FAIL_ON_CASE_FAILURE` env flag ("1"/"true"). Defaults to ON in
+ * live mode (so the real pipeline gates CI) and OFF offline (the stub cannot
+ * satisfy real expectations, so its case failures are tolerated).
+ */
+const FAIL_ON_CASE_FAILURE = ((): boolean => {
+  const raw = process.env.FAIL_ON_CASE_FAILURE?.toLowerCase();
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return LIVE_MODE;
+})();
 
 // ---------------------------------------------------------------------------
 // Assertions
@@ -270,8 +382,21 @@ async function main(): Promise<number> {
         "Loads evals/cases/*.json, validates them against the EvalCase schema,",
         "and runs each case through the target function.",
         "",
-        "Phase 0 uses a stub target; case assertion failures are tolerated but",
-        "structural errors (bad JSON / schema) exit non-zero.",
+        "TARGET (pluggable via env):",
+        "  default (offline) — a dependency-free stub target; needs no DB/LLM.",
+        "                      Case failures are tolerated; only structural errors",
+        "                      (bad JSON / schema) exit non-zero.",
+        "  EVAL_LIVE=1 + DATABASE_URL — build the REAL @vta/core pipeline against a",
+        "                      migrated + seeded course DB with a configured LLM.",
+        "                      Failing cases gate CI in this mode.",
+        "",
+        "Env flags:",
+        "  EVAL_LIVE=1            enable the live target (also requires DATABASE_URL).",
+        "  DATABASE_URL=...       Postgres URL for the seeded course (live mode).",
+        "  EVAL_COURSE_ID=...     seeded course id to target (default 'eval-course').",
+        "  LLM_PROFILE=dev|prod   LLM role→model profile (default 'dev').",
+        "  FAIL_ON_CASE_FAILURE=1 force gating on case failures (default: on in live",
+        "                         mode, off offline).",
       ].join("\n"),
     );
     return 0;
@@ -289,7 +414,7 @@ async function main(): Promise<number> {
     throw err;
   }
 
-  const target = makeTarget();
+  const target = await makeTarget();
   const results: EvalResult[] = [];
 
   for (const { file, cases } of loaded) {
@@ -316,21 +441,24 @@ async function main(): Promise<number> {
   const passed = results.filter((r) => r.passed).length;
   const failed = total - passed;
 
-   
-  console.log(`\n${passed}/${total} cases passed (${failed} failed).`);
+
+  console.log(
+    `\n${passed}/${total} cases passed (${failed} failed). ` +
+      `[target: ${LIVE_MODE ? "live @vta/core pipeline" : "offline stub"}]`,
+  );
 
   if (FAIL_ON_CASE_FAILURE && failed > 0) {
-     
+
     console.error("Failing because one or more cases did not pass.");
     return 1;
   }
 
   if (!FAIL_ON_CASE_FAILURE && failed > 0) {
-     
+
     console.log(
-      "\nNote (Phase 0): case failures above are tolerated because the target " +
-        "is a stub. Wire the real TeachingService and flip FAIL_ON_CASE_FAILURE " +
-        "to make these gate CI.",
+      "\nNote: case failures above are tolerated because the target is the " +
+        "offline stub. Run with EVAL_LIVE=1 + DATABASE_URL (seeded course) to " +
+        "exercise the real pipeline, or set FAIL_ON_CASE_FAILURE=1 to gate CI.",
     );
   }
 

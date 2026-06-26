@@ -62,11 +62,16 @@ export function makeMessageHandler(
       // (2) Resolve the owning course + the caller's role. A `null` result means
       // this channel maps to no course — ignore SILENTLY (never reply, so we
       // don't leak that any course exists).
+      // Pass the EXTERNAL Discord identity (snowflake + username). Tenancy maps
+      // it to an internal users.id uuid server-side; we never key role/audit on
+      // the snowflake. Tenant scope still comes only from server-side channel
+      // resolution, never from anything the author controls.
       const tenant = await tenancy.resolveInbound({
         channel: 'discord',
         channelId: message.channelId,
         guildId: message.guildId ?? undefined,
-        userId: message.author.id,
+        externalUserId: message.author.id,
+        displayName: message.author.username,
       });
       if (tenant === null) return;
 
@@ -82,7 +87,9 @@ export function makeMessageHandler(
         id: message.id,
         channel: 'discord',
         courseId: tenant.courseId,
-        userId: message.author.id,
+        // The INTERNAL users.id uuid resolved server-side — NOT the raw Discord
+        // snowflake. The audit trail and any downstream role check key on this.
+        userId: tenant.userId,
         role: tenant.role,
         text,
         ...(inThread ? { threadId: message.channelId } : {}),

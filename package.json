@@ -25,6 +25,7 @@
     "db:push": "pnpm --filter @vta/data db:push",
     "db:migrate": "pnpm --filter @vta/data db:migrate",
     "db:studio": "pnpm --filter @vta/data db:studio",
+    "db:indexes": "pnpm --filter @vta/data db:indexes",
     "eval": "tsx evals/run.ts"
   },
   "devDependencies": {

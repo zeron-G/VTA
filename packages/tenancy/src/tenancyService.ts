@@ -23,6 +23,7 @@ import type {
   CourseRole,
   UserId,
 } from '@vta/shared';
+import { UserRepository } from '@vta/data';
 import type { Db } from '@vta/data';
 
 import { CourseResolver } from './courseResolver.js';
@@ -44,13 +45,21 @@ export interface InboundRouting {
   readonly channelId: string;
   /** Optional Discord guild id, used to disambiguate channel ids across guilds. */
   readonly guildId?: string;
-  /** The channel-native user id, resolved to a role within the course. */
-  readonly userId: UserId;
+  /**
+   * The EXTERNAL channel-native user id (Phase-1: a Discord snowflake). It is
+   * resolved to an internal `users.id` uuid HERE before any role/audit lookup —
+   * membership queries never receive the raw snowflake.
+   */
+  readonly externalUserId: string;
+  /** Optional display name from the channel, used to seed/refresh the user row. */
+  readonly displayName?: string;
 }
 
 /** The fully-resolved tenant context for an inbound message. */
 export interface ResolvedTenantContext {
   readonly courseId: CourseId;
+  /** The INTERNAL `users.id` uuid the external identity resolved to. */
+  readonly userId: UserId;
   readonly role: CourseRole;
   readonly config: ResolvedCourseConfig;
 }
@@ -61,19 +70,27 @@ export class TenancyService {
   private readonly log: Logger;
   private readonly courseResolver: CourseResolver;
   private readonly roleResolver: RoleResolver;
+  private readonly users: UserRepository;
 
   constructor(deps: TenancyServiceDeps) {
     this.db = deps.db;
     this.log = deps.logger ?? createLogger({ name: 'tenancy' });
     this.courseResolver = new CourseResolver({ db: deps.db });
     this.roleResolver = new RoleResolver({ db: deps.db });
+    this.users = new UserRepository(deps.db);
   }
 
   /**
    * Resolve the full tenant context for an inbound message.
    *
-   * @returns the `{ courseId, role, config }` triple, or `null` when the
-   *          channel maps to no course.
+   * The supplied `externalUserId` is the channel-native identity (Phase-1: a
+   * Discord snowflake). It is mapped to a stable internal `users.id` uuid via
+   * {@link UserRepository.upsertByDiscordId} BEFORE any role lookup, so role and
+   * audit only ever see the internal uuid — never the raw snowflake.
+   *
+   * @returns the `{ courseId, userId, role, config }` context, or `null` when
+   *          the channel maps to no course (resolved before any user upsert, so
+   *          unrouted traffic never creates an identity row).
    */
   async resolveInbound(
     routing: InboundRouting,
@@ -92,22 +109,35 @@ export class TenancyService {
       return null;
     }
 
+    // Resolve the external channel identity to the internal user uuid first;
+    // every downstream lookup keys on this uuid, not the snowflake.
+    const user = await this.users.upsertByDiscordId(
+      routing.externalUserId,
+      routing.displayName,
+    );
+    const userId: UserId = user.id;
+
     // Role and config are resolved strictly for the SAME courseId — never the
-    // caller-supplied routing id — preserving tenant isolation.
+    // caller-supplied routing id — preserving tenant isolation. Role is keyed on
+    // the internal uuid.
     const [role, config] = await Promise.all([
-      this.roleResolver.resolveRole(courseId, routing.userId),
+      this.roleResolver.resolveRole(courseId, userId),
       loadCourseConfig({ db: this.db }, courseId),
     ]);
 
     this.log.debug({ courseId, role, channel: routing.channel }, 'resolved tenant context');
 
-    return { courseId, role, config };
+    return { courseId, userId, role, config };
   }
 
   /**
    * Resolve a tenant context by course slug (admin tooling / web entry). Returns
    * `null` if no course has that slug. The user's role still defaults to
    * `'standard'` when no membership exists.
+   *
+   * `userId` here is ALREADY the internal `users.id` uuid (admin tooling resolves
+   * identity out-of-band); it is passed through to role resolution and the
+   * returned context unchanged.
    */
   async resolveBySlug(
     slug: string,
@@ -121,6 +151,6 @@ export class TenancyService {
       loadCourseConfig({ db: this.db }, courseId),
     ]);
 
-    return { courseId, role, config };
+    return { courseId, userId, role, config };
   }
 }

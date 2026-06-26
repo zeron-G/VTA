@@ -6,6 +6,7 @@
 export { guardCourse } from "./guard.js";
 
 export { CourseRepository } from "./CourseRepository.js";
+export { UserRepository } from "./UserRepository.js";
 export { MembershipRepository } from "./MembershipRepository.js";
 export { CourseConfigRepository } from "./CourseConfigRepository.js";
 export { MaterialRepository } from "./MaterialRepository.js";

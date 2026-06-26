@@ -114,6 +114,26 @@ docker compose down -v && docker compose up -d
 (Alternatively, enable it manually for the current database:
 `docker exec -it vta-postgres psql -U vta -d vta -c "CREATE EXTENSION IF NOT EXISTS vector;"`)
 
+## Applying retrieval indexes
+
+`drizzle-kit` (`pnpm db:push`) creates the tables but does **not** manage the
+pgvector extension or the retrieval indexes that the RAG queries depend on: the
+HNSW (cosine) ANN index on `chunks.embedding`, the GIN full-text index on
+`to_tsvector('english', content)`, and the btree index on the denormalized
+tenant key `chunks.course_id`.
+
+Run the idempotent index script **once after `pnpm db:push`** (from the
+repository root):
+
+```bash
+pnpm db:push      # create/update tables (drizzle-kit)
+pnpm db:indexes   # create the pgvector + full-text + tenant indexes
+```
+
+`pnpm db:indexes` uses `DATABASE_URL` and is safe to re-run — every statement is
+`IF NOT EXISTS`. Re-run it after any full reset (`docker compose down -v`) that
+drops the tables.
+
 ## Troubleshooting
 
 ### Init script did not run

@@ -24,13 +24,21 @@ export type LlmProfileName = 'dev' | 'prod';
 const DEEPSEEK_ENDPOINT: string | undefined = process.env.DEEPSEEK_BASE_URL;
 
 /**
- * Development profile: all roles on OpenAI via OAuth. `embed` uses the
- * dedicated embedding model rather than the chat model.
+ * Development profile: chat roles run on OpenAI via Codex OAuth. `embed` is the
+ * exception — the OpenAI embeddings API does not accept the Codex/ChatGPT OAuth
+ * bearer, so even in dev it must authenticate with a real OpenAI platform API
+ * key resolved from the SecretsProvider. It uses the dedicated embedding model
+ * rather than the chat model.
  */
 const DEV_PROFILE: RoleMapping = {
   'agent.primary': { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
   'agent.fallback': { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
-  embed: { provider: 'openai', model: 'text-embedding-3-small', auth: 'oauth' },
+  embed: {
+    provider: 'openai',
+    model: 'text-embedding-3-small',
+    auth: 'apiKey',
+    apiKeyName: 'openai.api-key',
+  },
   // TODO(phase-1): OpenAI has no first-class rerank endpoint. For dev we reuse
   // the chat model as a listwise reranker via a scoring prompt; a real rerank
   // provider (e.g. Cohere / a cross-encoder) should be wired in Phase 1.

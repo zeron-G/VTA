@@ -45,6 +45,34 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
 
+  apps/admin:
+    dependencies:
+      '@vta/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vta/data':
+        specifier: workspace:*
+        version: link:../../packages/data
+      '@vta/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@vta/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@vta/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.0
+      rimraf:
+        specifier: ^6.1.3
+        version: 6.1.3
+
   apps/discord-worker:
     dependencies:
       '@vta/core':
