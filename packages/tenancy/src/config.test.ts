@@ -17,11 +17,15 @@ import {
 } from './types.js';
 
 describe('DEFAULT_CONTENT_RULES', () => {
-  it('has the expected conservative guardrail flags', () => {
+  it('has the expected guardrail flags', () => {
+    // Academic-integrity gates stay ON by default.
     expect(DEFAULT_CONTENT_RULES.refuseGrades).toBe(true);
     expect(DEFAULT_CONTENT_RULES.refuseHomeworkSolutions).toBe(true);
-    expect(DEFAULT_CONTENT_RULES.refuseOffTopic).toBe(true);
-    expect(DEFAULT_CONTENT_RULES.requireCitations).toBe(true);
+    // The assistant may answer general/web questions, not only course material,
+    // so off-topic refusal and hard citation-grounding are OFF by default (a
+    // course can opt back in via its stored config).
+    expect(DEFAULT_CONTENT_RULES.refuseOffTopic).toBe(false);
+    expect(DEFAULT_CONTENT_RULES.requireCitations).toBe(false);
     // Phase-1 hard lock: unreleased material can never be surfaced.
     expect(DEFAULT_CONTENT_RULES.allowUnreleasedMaterial).toBe(false);
     // Refusal/redirect messages are present and non-empty.

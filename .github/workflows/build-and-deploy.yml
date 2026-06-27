@@ -46,8 +46,6 @@ env:
 jobs:
   build-push:
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -109,4 +107,4 @@ jobs:
             az containerapp update \
               -n "${{ env.CONTAINER_APP }}" \
               -g "${{ env.RESOURCE_GROUP }}" \
-              --image "${{ needs.build-push.outputs.image }}"
+              --image "${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}"

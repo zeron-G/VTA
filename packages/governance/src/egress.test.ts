@@ -20,12 +20,22 @@ const NOOP_PII: PiiRedactor = {
   redact: (text: string) => Promise.resolve({ redacted: text, foundCount: 0 }),
 };
 
-/** Build a context with the real conservative default content rules. */
+/** Build a context with the real (now permissive) default content rules. */
 const CTX: GovernanceContext = {
   courseId: 'course-1',
   role: 'standard',
   rules: DEFAULT_CONTENT_RULES,
   requestId: 'req-1',
+};
+
+/**
+ * A context for a course that OPTS IN to the stricter gates (citations required,
+ * off-topic refused). The defaults are permissive (a course may waive these), so
+ * tests that exercise the "required -> refuse" behavior set the flags explicitly.
+ */
+const STRICT_CTX: GovernanceContext = {
+  ...CTX,
+  rules: { ...DEFAULT_CONTENT_RULES, requireCitations: true, refuseOffTopic: true },
 };
 
 /** A judge that always answers "no" (no violation on any boundary axis). */
@@ -44,7 +54,7 @@ describe('EgressGovernor fail-safe', () => {
 
     const decision = await gov.inspect(
       'Photosynthesis converts light into chemical energy.',
-      CTX,
+      STRICT_CTX,
       { citations: [] },
     );
 
@@ -65,12 +75,12 @@ describe('EgressGovernor fail-safe', () => {
     // off-topic axis where a throwing judge is `unknown` and `unknown` refuses.
     const decision = await gov.inspect(
       'The capital of France is Paris.',
-      CTX,
+      STRICT_CTX,
       { citations: [{ sourceId: 'm1', title: 'Geography Notes' }] },
     );
 
     expect(decision.status).toBe('refused');
-    expect(decision.text).toBe(CTX.rules.offTopicMessage);
+    expect(decision.text).toBe(STRICT_CTX.rules.offTopicMessage);
     expect(
       decision.verdicts.some(
         (v) => v.check === 'content.offtopic' && v.decision === 'block',
