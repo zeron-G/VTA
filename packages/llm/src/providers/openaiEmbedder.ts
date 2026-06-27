@@ -2,8 +2,7 @@
  * OpenAI-backed embedder.
  *
  * Isolates the `openai` SDK for the embedding path (text-embedding-3-small by
- * default). Supports both credential strategies: a static API key, or a Codex
- * OAuth bearer token resolved lazily per call.
+ * default). Authenticates with a static API key resolved by the router.
  *
  * TODO(verify-at-install): confirm the `openai` v4 SDK constructor options and
  * `embeddings.create` response shape against the pinned version (^4.77.0).
@@ -26,14 +25,10 @@ export interface OpenAiEmbedderOptions {
 export class OpenAiEmbedder implements Embedder {
   constructor(private readonly options: OpenAiEmbedderOptions) {}
 
-  /**
-   * Build a per-call client. OAuth tokens may rotate, so we resolve the token
-   * and construct the client at call time rather than caching it.
-   */
+  /** Build the OpenAI client. The router resolves the API key into the credential. */
   private async makeClient(): Promise<OpenAI> {
     const { credential, endpoint } = this.options;
-    const apiKey =
-      credential.kind === 'apiKey' ? credential.apiKey : await credential.getToken();
+    const apiKey = credential.apiKey;
 
     return new OpenAI({
       apiKey,

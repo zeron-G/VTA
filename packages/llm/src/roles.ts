@@ -11,8 +11,8 @@ import type { LlmRole } from '@vta/shared';
 /** Which concrete backend family a role resolves to. */
 export type ProviderKind = 'deepseek' | 'openai' | 'azure-openai' | 'openai-compatible';
 
-/** How a provider authenticates. */
-export type AuthKind = 'apiKey' | 'oauth';
+/** How a provider authenticates. API keys only (Codex/ChatGPT OAuth was removed). */
+export type AuthKind = 'apiKey';
 
 /**
  * A fully-resolved description of how to serve one role.
@@ -21,9 +21,8 @@ export type AuthKind = 'apiKey' | 'oauth';
  *  - `model`       concrete model id passed to that backend
  *  - `endpoint`    base URL override (DeepSeek / Azure / OpenAI-compatible);
  *                  may be supplied at load time from an env var
- *  - `auth`        'apiKey' -> resolve `apiKeyName` from the SecretsProvider;
- *                  'oauth'  -> use the Codex OAuth token helper
- *  - `apiKeyName`  secrets-provider name to look up when `auth === 'apiKey'`
+ *  - `auth`        always 'apiKey' -> resolve `apiKeyName` from the SecretsProvider
+ *  - `apiKeyName`  secrets-provider name to look up for this role's key
  */
 export interface ModelSpec {
   readonly provider: ProviderKind;

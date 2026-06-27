@@ -18,8 +18,8 @@
 
 targetScope = 'subscription'
 
-@description('Azure region for all resources.')
-param location string = 'eastus'
+@description('Azure region for all resources. NOTE: this subscription offer restricts Postgres Flexible in eastus, so default to eastus2.')
+param location string = 'eastus2'
 
 @description('Short name prefix used in resource names and tags.')
 param prefix string = 'vta'
@@ -38,7 +38,7 @@ param pgAdminPassword string
 @description('Public IPv4 of the operator workstation allowed to reach Postgres. Use 0.0.0.0 to skip the client firewall rule.')
 param clientIp string = '0.0.0.0'
 
-var rgName = 'rg-${prefix}-${environment}'
+var rgName = 'VirtualTeachingAssistant'
 var tags = {
   project: 'vta'
   environment: environment

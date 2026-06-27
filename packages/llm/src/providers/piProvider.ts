@@ -102,9 +102,7 @@ interface PiCompletionLike {
  * How this provider obtains credentials at call time. The router supplies one
  * of these so the Pi adapter stays agnostic about apiKey-vs-oauth resolution.
  */
-export type PiCredential =
-  | { readonly kind: 'apiKey'; readonly apiKey: string }
-  | { readonly kind: 'bearer'; readonly getToken: () => Promise<string> };
+export type PiCredential = { readonly kind: 'apiKey'; readonly apiKey: string };
 
 export interface PiProviderOptions {
   /** Concrete model id (e.g. "gpt-5.4-mini", "deepseek-v4-flash"). */
@@ -306,10 +304,7 @@ export class PiProvider implements LlmProvider {
     const { model, providerLabel, endpoint, credential } = this.options;
 
     // Resolve credentials immediately before the call (tokens may refresh).
-    const auth =
-      credential.kind === 'apiKey'
-        ? { apiKey: credential.apiKey }
-        : { bearerToken: await credential.getToken() };
+    const auth = { apiKey: credential.apiKey };
 
     try {
       const raw = await this.client.complete({

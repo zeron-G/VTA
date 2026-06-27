@@ -3,8 +3,8 @@
  *
  * CARDINAL RULE: no other package names a concrete model. Callers ask the
  * {@link ModelRouter} for a logical {@link LlmRole} (from `@vta/shared`); this
- * layer resolves it to a concrete provider + model, handles dual auth (API key
- * or Codex OAuth), fails over primary→fallback, and records usage.
+ * layer resolves it to a concrete provider + model, authenticates with API keys,
+ * fails over primary→fallback, and records usage.
  *
  * All external-SDK uncertainty is isolated in `providers/piProvider.ts`
  * (pi-ai) and `providers/openaiEmbedder.ts` (openai). See their TODOs.
@@ -31,8 +31,6 @@ export { PROFILES, loadProfile } from './config.js';
 export type { LlmProfileName } from './config.js';
 
 // Auth helpers
-export { CodexOAuth } from './auth/codexOAuth.js';
-export type { CodexOAuthOptions } from './auth/codexOAuth.js';
 export { resolveApiKey } from './auth/apiKey.js';
 
 // Usage accounting

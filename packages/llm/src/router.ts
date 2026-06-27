@@ -6,9 +6,8 @@
  * for the agent path — fails over from primary to fallback. No caller ever
  * names a concrete model.
  *
- * Providers are built lazily and cached per role, so credentials are resolved
- * once per role rather than per request (OAuth tokens still refresh inside the
- * provider on each call).
+ * Providers are built lazily and cached per role, so each role's API key is
+ * resolved once on first use rather than per request.
  */
 
 import { ConfigError, LlmUnavailableError, VtaError, toError } from '@vta/shared';
@@ -17,7 +16,6 @@ import type { Embedder, LlmProvider } from './provider.js';
 import type { ModelSpec, RoleMapping } from './roles.js';
 import type { LlmRequest, LlmResult } from './types.js';
 import { resolveApiKey } from './auth/apiKey.js';
-import { CodexOAuth } from './auth/codexOAuth.js';
 import { PiProvider } from './providers/piProvider.js';
 import type { PiCredential } from './providers/piProvider.js';
 import { OpenAiEmbedder } from './providers/openaiEmbedder.js';
@@ -54,15 +52,12 @@ export interface ModelRouterOptions {
   readonly secrets: SecretsProvider;
   /** Defaults to a {@link LoggingUsageSink}. */
   readonly usage?: UsageSink;
-  /** Injectable for tests; defaults to a real {@link CodexOAuth}. */
-  readonly codexOAuth?: CodexOAuth;
 }
 
 export class ModelRouter {
   private readonly mapping: RoleMapping;
   private readonly secrets: SecretsProvider;
   private readonly usage: UsageSink;
-  private readonly codexOAuth: CodexOAuth;
 
   /** Lazily-built chat providers, cached by role. */
   private readonly providerCache = new Map<LlmRole, Promise<LlmProvider>>();
@@ -73,7 +68,6 @@ export class ModelRouter {
     this.mapping = options.mapping;
     this.secrets = options.secrets;
     this.usage = options.usage ?? new LoggingUsageSink();
-    this.codexOAuth = options.codexOAuth ?? new CodexOAuth();
   }
 
   /** Resolve the concrete spec for a role. */
@@ -86,15 +80,10 @@ export class ModelRouter {
     return spec;
   }
 
-  /** Build the credential strategy for a spec (apiKey vs Codex OAuth bearer). */
+  /** Build the credential strategy for a spec. All roles authenticate with an API key. */
   private async credentialFor(spec: ModelSpec): Promise<PiCredential> {
-    if (spec.auth === 'apiKey') {
-      const apiKey = await resolveApiKey(spec, this.secrets);
-      return { kind: 'apiKey', apiKey };
-    }
-    // oauth → lazy bearer token resolved at call time so refresh is honoured.
-    const oauth = this.codexOAuth;
-    return { kind: 'bearer', getToken: () => oauth.getAccessToken() };
+    const apiKey = await resolveApiKey(spec, this.secrets);
+    return { kind: 'apiKey', apiKey };
   }
 
   /**

@@ -2,8 +2,8 @@
  * Named LLM profiles.
  *
  * A profile is a complete {@link RoleMapping} chosen by environment:
- *   - `dev`  — everything runs through OpenAI via Codex OAuth (no API keys to
- *              manage locally; a developer just needs a logged-in Codex CLI).
+ *   - `dev`  — same provider/auth shape as prod (DeepSeek primary, OpenAI
+ *              fallback), all via API keys; pointed at dev/test keys+endpoints.
  *   - `prod` — the agent's primary path is DeepSeek (cost), with an OpenAI
  *              fallback; embeddings/guard stay on OpenAI for stability.
  *
@@ -24,26 +24,46 @@ export type LlmProfileName = 'dev' | 'prod';
 const DEEPSEEK_ENDPOINT: string | undefined = process.env.DEEPSEEK_BASE_URL;
 
 /**
- * Development profile: chat roles run on OpenAI via Codex OAuth. `embed` is the
- * exception — the OpenAI embeddings API does not accept the Codex/ChatGPT OAuth
- * bearer, so even in dev it must authenticate with a real OpenAI platform API
- * key resolved from the SecretsProvider. It uses the dedicated embedding model
- * rather than the chat model.
+ * Development profile: same providers/auth as prod (DeepSeek primary, OpenAI
+ * fallback), all authenticated with API keys from the SecretsProvider. Point it
+ * at dev/test keys (and optionally a dev DeepSeek endpoint) via the environment;
+ * it differs from prod only in which keys/endpoints are supplied.
  */
 const DEV_PROFILE: RoleMapping = {
-  'agent.primary': { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
-  'agent.fallback': { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
+  'agent.primary': {
+    provider: 'deepseek',
+    model: 'deepseek-v4-flash',
+    auth: 'apiKey',
+    apiKeyName: 'deepseek.api-key',
+    endpoint: DEEPSEEK_ENDPOINT,
+  },
+  'agent.fallback': {
+    provider: 'openai',
+    model: 'gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openai.api-key',
+  },
   embed: {
     provider: 'openai',
     model: 'text-embedding-3-small',
     auth: 'apiKey',
     apiKeyName: 'openai.api-key',
   },
-  // TODO(phase-1): OpenAI has no first-class rerank endpoint. For dev we reuse
-  // the chat model as a listwise reranker via a scoring prompt; a real rerank
+  // TODO(phase-1): OpenAI has no first-class rerank endpoint. We reuse the chat
+  // model as a listwise reranker via a scoring prompt; a dedicated rerank
   // provider (e.g. Cohere / a cross-encoder) should be wired in Phase 1.
-  rerank: { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
-  'guard.judge': { provider: 'openai', model: 'gpt-5.4-mini', auth: 'oauth' },
+  rerank: {
+    provider: 'openai',
+    model: 'gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openai.api-key',
+  },
+  'guard.judge': {
+    provider: 'openai',
+    model: 'gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openai.api-key',
+  },
 };
 
 /**
