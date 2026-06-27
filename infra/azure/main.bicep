@@ -18,8 +18,11 @@
 
 targetScope = 'subscription'
 
-@description('Azure region for all resources. NOTE: this subscription offer restricts Postgres Flexible in eastus, so default to eastus2.')
+@description('Azure region for the resource group + deployment metadata.')
 param location string = 'eastus2'
+
+@description('Azure region for the Postgres server. This subscription offer restricts Postgres Flexible in busy regions (eastus/eastus2 confirmed restricted); westus3 works. Verified live 2026-06-26.')
+param pgLocation string = 'westus3'
 
 @description('Short name prefix used in resource names and tags.')
 param prefix string = 'vta'
@@ -55,7 +58,7 @@ module postgres 'postgres.bicep' = {
   scope: rg
   name: 'vta-postgres'
   params: {
-    location: location
+    location: pgLocation
     prefix: prefix
     environment: environment
     pgAdminUser: pgAdminUser

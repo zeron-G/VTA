@@ -30,7 +30,9 @@ param clientIp string
 param tags object
 
 var suffix = uniqueString(resourceGroup().id)
-var serverName = toLower('${prefix}-pg-${environment}-${suffix}')
+// Region-qualified so a failed attempt in one region never blocks another
+// (the server name is otherwise deterministic per resource group).
+var serverName = toLower('${prefix}-pg-${location}-${suffix}')
 var databaseName = 'vta'
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
