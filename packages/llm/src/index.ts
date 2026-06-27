@@ -46,3 +46,7 @@ export type { OpenAiEmbedderOptions } from './providers/openaiEmbedder.js';
 // The router — primary public surface
 export { ModelRouter } from './router.js';
 export type { ModelRouterOptions } from './router.js';
+
+// OpenAI-hosted web search (a tool capability, not a chat role).
+export { OpenAiWebSearch } from './webSearch.js';
+export type { OpenAiWebSearchOptions, WebSearchResult } from './webSearch.js';

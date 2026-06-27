@@ -118,9 +118,17 @@ export interface ContentRules {
 export const DEFAULT_CONTENT_RULES: ContentRules = {
   refuseGrades: true,
   refuseHomeworkSolutions: true,
-  refuseOffTopic: true,
+  // The assistant is allowed to answer general/background questions (and use a
+  // web-search tool), not only this course's own materials, so off-topic
+  // answers are NOT auto-refused. Academic-integrity gates (grades, homework
+  // solutions) stay on.
+  refuseOffTopic: false,
   allowUnreleasedMaterial: false,
-  requireCitations: true,
+  // Do NOT require a course citation on every answer: when the course has no
+  // ingested materials (or the question is general), an uncited answer is still
+  // useful. Grounding is preferred (the prompt asks the model to retrieve and
+  // cite course materials when relevant) but not hard-enforced at egress.
+  requireCitations: false,
   gradeRedirectMessage:
     'I can’t share or discuss individual grades. Please contact your instructor or check the course gradebook.',
   offTopicMessage:

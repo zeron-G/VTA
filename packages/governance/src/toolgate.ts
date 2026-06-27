@@ -20,11 +20,16 @@ import type { GovernanceContext } from './context.js';
 
 /**
  * The read-only tool set the assistant may use in Phase 1: retrieval over
- * course materials and the course catalog lookup. Both are side-effect-free
- * reads scoped to the tenant; nothing here can mutate state or reach outside
- * the course.
+ * course materials, the course catalog lookup, and a public web search. All are
+ * side-effect-free reads; `retrieve`/`catalog_lookup` are tenant-scoped to the
+ * course and `web_search` reads only the public web (no course/tenant data).
+ * Nothing here can mutate state or emit to a channel.
  */
-export const DEFAULT_ALLOWED_TOOLS: readonly string[] = ['retrieve', 'catalog_lookup'];
+export const DEFAULT_ALLOWED_TOOLS: readonly string[] = [
+  'retrieve',
+  'catalog_lookup',
+  'web_search',
+];
 
 /** Optional per-tool argument validator. Return `null` when valid, else a reason. */
 export type ToolArgValidator = (args: unknown) => string | null;

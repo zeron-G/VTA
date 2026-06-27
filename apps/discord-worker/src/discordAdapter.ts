@@ -59,6 +59,22 @@ export function makeMessageHandler(
       // (1c) Phase 1 is guild-only: DMs have no course routing, so drop them.
       if (message.guild === null) return;
 
+      // Per-student threading mirrors the conversation model: if the message is
+      // already inside a thread, that thread IS the conversation key; otherwise
+      // we will start one on the message below. We compute this BEFORE tenant
+      // resolution because course routing must key on the MAPPED (parent)
+      // channel, not the thread's own id.
+      const inThread = message.channel.isThread();
+
+      // Course routing uses the parent text channel when the message lives in a
+      // thread (a thread's own id is never in the channel map, so a follow-up
+      // posted inside the bot's reply thread would otherwise resolve to no
+      // course and be dropped — that was the "only answers once" bug).
+      const routingChannelId =
+        inThread && message.channel.parentId !== null
+          ? message.channel.parentId
+          : message.channelId;
+
       // (2) Resolve the owning course + the caller's role. A `null` result means
       // this channel maps to no course — ignore SILENTLY (never reply, so we
       // don't leak that any course exists).
@@ -68,17 +84,12 @@ export function makeMessageHandler(
       // resolution, never from anything the author controls.
       const tenant = await tenancy.resolveInbound({
         channel: 'discord',
-        channelId: message.channelId,
+        channelId: routingChannelId,
         guildId: message.guildId ?? undefined,
         externalUserId: message.author.id,
         displayName: message.author.username,
       });
       if (tenant === null) return;
-
-      // Per-student threading mirrors the conversation model: if the message is
-      // already inside a thread, that thread IS the conversation key; otherwise
-      // we will start one on the message below.
-      const inThread = message.channel.isThread();
 
       // (3) Build the channel-agnostic request. `threadId` is set only when the
       // message already lives in a thread; for a top-level message it is left

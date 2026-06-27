@@ -27,7 +27,7 @@ import {
 import type { SecretsProvider, Logger } from '@vta/shared';
 import { createLogger } from '@vta/shared';
 import type { RoleMapping } from '@vta/llm';
-import { ModelRouter } from '@vta/llm';
+import { ModelRouter, OpenAiWebSearch } from '@vta/llm';
 import type { EmbeddingProvider } from '@vta/rag';
 import { RagRetriever } from '@vta/rag';
 import { createDefaultTools } from '@vta/tools';
@@ -107,9 +107,21 @@ export function createTeachingService(config: CoreConfig): TeachingService {
     logger: log,
   });
 
+  // --- Web search: OpenAI-hosted (reuses the same `openai.api-key`). The key is
+  //     resolved lazily on first use and the searcher cached, so construction
+  //     stays I/O-free. `@vta/tools` adds a `web_search` tool when this is given.
+  let webSearcher: OpenAiWebSearch | undefined;
+  const webSearch = async (query: string): ReturnType<OpenAiWebSearch['search']> => {
+    if (webSearcher === undefined) {
+      const apiKey = await config.secrets.require('openai.api-key');
+      webSearcher = new OpenAiWebSearch({ apiKey });
+    }
+    return webSearcher.search(query);
+  };
+
   // --- Tools + the structural, default-deny tool gate. -----------------------
-  const tools = createDefaultTools({ retriever, db });
-  // Default allowlist (retrieve + catalog_lookup) — the read-only Phase-1 set.
+  const tools = createDefaultTools({ retriever, db, webSearch });
+  // Default allowlist (retrieve + catalog_lookup + web_search) — read-only set.
   const toolgate = new ToolGate();
 
   // --- Governance: ingress + egress, wired with the working default ports. ---
