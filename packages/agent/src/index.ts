@@ -2,8 +2,8 @@
  * `@vta/agent` — the governed, bounded tool-calling agent for the Virtual
  * Teaching Assistant.
  *
- * This package is OUR OWN orchestration loop on top of `@vta/llm` (which wraps
- * pi-ai), with the `@vta/governance` tool-gate enforced INLINE before every
+ * This package is OUR OWN orchestration loop on top of `@vta/llm`, with the
+ * `@vta/governance` tool-gate enforced INLINE before every
  * tool execution — functionally a `beforeToolCall` hook, but in our code so the
  * cardinal invariant ("no tool runs unless the gate allowed it") is certain and
  * unit-testable. Three guarantees hold:
@@ -11,8 +11,8 @@
  *   2. The loop is hard-bounded — it can never spin forever.
  *   3. Grounding citations are captured and surfaced for the egress gate.
  *
- * It also ships a degraded-but-safe Codex CLI fallback (no tools, read-only,
- * self-grounded via injected retrieval) composed behind a permission-monotonic
+ * It also ships a degraded-but-safe static fallback (no tools, no I/O, a fixed
+ * "temporarily unavailable" reply) composed behind a permission-monotonic
  * `FallbackAgent`.
  */
 
@@ -29,9 +29,9 @@ export { toLlmTools, findTool } from './toolBridge.js';
 export { PiAgent } from './piAgent.js';
 export type { PiAgentDeps } from './piAgent.js';
 
-// The degraded-but-safe Codex fallback.
-export { CodexAgent } from './codexAgent.js';
-export type { CodexAgentDeps } from './codexAgent.js';
+// The degraded-but-safe static fallback.
+export { StaticFallbackAgent } from './staticFallbackAgent.js';
+export type { StaticFallbackAgentDeps } from './staticFallbackAgent.js';
 
 // Permission-monotonic composition of primary + fallback.
 export { FallbackAgent } from './fallbackAgent.js';

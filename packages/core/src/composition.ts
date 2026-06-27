@@ -38,7 +38,7 @@ import {
   RegexPiiRedactor,
   ToolGate,
 } from '@vta/governance';
-import { CodexAgent, FallbackAgent, PiAgent } from '@vta/agent';
+import { StaticFallbackAgent, FallbackAgent, PiAgent } from '@vta/agent';
 import type { CourseAgent } from '@vta/agent';
 import { AuditService } from '@vta/audit';
 import { loadCourseConfig } from '@vta/tenancy';
@@ -127,11 +127,12 @@ export function createTeachingService(config: CoreConfig): TeachingService {
   });
 
   // --- Agent: Pi primary (tool-using, governed loop) with a degraded-but-safe
-  //     Codex fallback. FallbackAgent is permission-monotonic; either output
-  //     still flows through the egress gate above.
+  //     static fallback. FallbackAgent is permission-monotonic; either output
+  //     still flows through the egress gate above. The fallback does no I/O and
+  //     runs no subprocess — it returns a fixed "temporarily unavailable" reply.
   const pi = new PiAgent({ router, tools, toolgate, logger: log });
-  const codex = new CodexAgent({ retriever, logger: log });
-  const agent: CourseAgent = new FallbackAgent({ primary: pi, fallback: codex, logger: log });
+  const degraded = new StaticFallbackAgent({ logger: log });
+  const agent: CourseAgent = new FallbackAgent({ primary: pi, fallback: degraded, logger: log });
 
   // --- Audit: durable, append-only disclosure log writer. --------------------
   const audit = new AuditService(auditRepo, { logger: log });
