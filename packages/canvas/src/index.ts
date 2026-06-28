@@ -24,6 +24,7 @@ export {
   toNormalizedAnnouncement,
   toNormalizedModule,
   toNormalizedSyllabus,
+  toNormalizedFile,
 } from './content.js';
 
 export type {

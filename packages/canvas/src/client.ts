@@ -176,6 +176,65 @@ export class CanvasClient {
   }
 
   /**
+   * Download a course file's BINARY content from its time-limited `url`.
+   *
+   * Read-only (GET) like everything else; follows the redirect Canvas issues to
+   * its CDN (the download URL carries its own verifier, so auth need not survive
+   * the redirect) and applies the same bounded retry/backoff as JSON requests.
+   * Returns the raw bytes for a text-extraction front-end to parse.
+   */
+  async downloadFile(file: CanvasFile): Promise<Uint8Array> {
+    const url = file.url;
+    if (url === undefined || url === '') {
+      throw new CanvasApiError('Canvas file has no download URL', {
+        method: 'GET',
+        url: '(none)',
+      });
+    }
+
+    const headers = new Headers({ Authorization: `Bearer ${this.token}` });
+    let attempt = 0;
+    for (;;) {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, { method: 'GET', headers });
+      } catch (cause) {
+        if (attempt < this.maxRetries) {
+          await this.backoff(attempt, undefined);
+          attempt += 1;
+          continue;
+        }
+        throw new CanvasApiError(`Canvas file download failed: ${toError(cause).message}`, {
+          method: 'GET',
+          url,
+          retryable: true,
+        });
+      }
+
+      await this.maybeThrottle(response);
+
+      if (response.ok) {
+        return new Uint8Array(await response.arrayBuffer());
+      }
+
+      const status = response.status;
+      const retryable = status === 429 || (status >= 500 && status <= 599);
+      if (retryable && attempt < this.maxRetries) {
+        const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+        await this.backoff(attempt, retryAfterMs);
+        attempt += 1;
+        continue;
+      }
+      throw new CanvasApiError(`Canvas file download error ${status}`, {
+        method: 'GET',
+        url,
+        status,
+        retryable,
+      });
+    }
+  }
+
+  /**
    * List course enrollments, SANITIZED to (userId, name, role) only.
    *
    * The raw Canvas payload carries `user.email` and other PII; we strip it here

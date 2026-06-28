@@ -20,6 +20,7 @@ import type { CanvasClient } from '@vta/canvas';
 import {
   toNormalizedAnnouncement,
   toNormalizedAssignment,
+  toNormalizedFile,
   toNormalizedModule,
   toNormalizedPage,
   toNormalizedSyllabus,
@@ -37,6 +38,7 @@ import type {
 import { EMBEDDING_DIMENSIONS } from '@vta/data';
 
 import { approximateTokenCount, chunkMarkdown } from './chunking.js';
+import { extractText, isExtractable } from './extraction.js';
 import type { EmbeddingProvider, IngestStats } from './types.js';
 
 /** Dependencies injected into the ingestor. */
@@ -78,7 +80,8 @@ export class RagIngestor {
 
   /**
    * Ingest an entire Canvas course: pages, assignments, announcements, modules,
-   * and the syllabus. Quiz questions and enrollments are intentionally excluded.
+   * the syllabus, and uploaded FILES (PDF/DOCX/PPTX/text are downloaded and their
+   * text extracted). Quiz questions and enrollments are intentionally excluded.
    *
    * @param courseId        the VTA tenant id (NOT the Canvas id) — tenant scope.
    * @param canvasCourseId  the Canvas course id (a numeric string).
@@ -203,6 +206,45 @@ export class RagIngestor {
       this.log.warn(
         { courseId, err: toError(cause).message },
         'skipping syllabus that failed to fetch',
+      );
+    }
+
+    // --- Files: download supported documents (PDF/DOCX/PPTX/text) and extract
+    //     their text. This is where most of a course's substance lives (lecture
+    //     slides, readings) — absent from the HTML endpoints above. Each file is
+    //     isolated: a single download/parse failure is logged and skipped, never
+    //     aborting the sync.
+    try {
+      const files = await this.canvas.listFiles(canvasId);
+      for (const file of files) {
+        if (
+          !isExtractable({
+            filename: file.filename,
+            contentType: file['content-type'],
+            size: file.size,
+          })
+        ) {
+          continue;
+        }
+        try {
+          const bytes = await this.canvas.downloadFile(file);
+          const text = await extractText(bytes, {
+            filename: file.filename,
+            contentType: file['content-type'],
+          });
+          if (text.trim() === '') continue; // nothing extractable (e.g. scanned image PDF)
+          out.push(toNormalizedFile(file, text));
+        } catch (cause) {
+          this.log.warn(
+            { courseId, fileId: file.id, err: toError(cause).message },
+            'skipping file that failed to download/extract',
+          );
+        }
+      }
+    } catch (cause) {
+      this.log.warn(
+        { courseId, err: toError(cause).message },
+        'skipping files listing that failed to fetch',
       );
     }
 

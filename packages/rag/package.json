@@ -20,10 +20,13 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@vta/shared": "workspace:*",
-    "@vta/data": "workspace:*",
     "@vta/canvas": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "@vta/data": "workspace:*",
+    "@vta/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "jszip": "3.10.1",
+    "mammoth": "1.12.0",
+    "unpdf": "1.6.2"
   },
   "devDependencies": {
     "rimraf": "^6.1.3"

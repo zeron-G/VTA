@@ -16,6 +16,7 @@ import type {
   CanvasAnnouncement,
   CanvasAssignment,
   CanvasCourse,
+  CanvasFile,
   CanvasModule,
   CanvasModuleItem,
   CanvasPage,
@@ -188,6 +189,24 @@ function renderModuleItem(item: CanvasModuleItem): string {
   if (item.html_url) return `${indent}- [${label}](${item.html_url})${kind}`;
   if (item.external_url) return `${indent}- [${label}](${item.external_url})${kind}`;
   return `${indent}- ${label}${kind}`;
+}
+
+/**
+ * A Canvas File (uploaded document) -> NormalizedMaterial.
+ *
+ * Unlike the HTML resources, a file's text is EXTRACTED from its binary content
+ * by the RAG layer (PDF/DOCX/PPTX/plain-text) and passed in here already as
+ * plain text — so we store it directly as the body (no HTML→Markdown step). The
+ * short-lived download URL is intentionally NOT persisted as `uri` (it expires).
+ */
+export function toNormalizedFile(file: CanvasFile, extractedText: string): NormalizedMaterial {
+  const title = safeTitle(file.display_name ?? file.filename, `File ${file.id}`);
+  return makeMaterial({
+    externalId: `file:${file.id}`,
+    title,
+    kind: 'file',
+    markdown: extractedText,
+  });
 }
 
 /**
