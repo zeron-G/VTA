@@ -12,8 +12,9 @@ import { ConfigError } from './errors.js';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
-  /** Selects the LLM profile in `@vta/llm` (e.g. dev = OAuth single model). */
-  LLM_PROFILE: z.enum(['dev', 'prod']).default('dev'),
+  /** Selects the LLM profile in `@vta/llm` (dev / prod = DeepSeek+OpenAI direct;
+   * openrouter = all model calls via the OpenRouter gateway). */
+  LLM_PROFILE: z.enum(['dev', 'prod', 'openrouter']).default('dev'),
 
   /** Postgres connection string (the pgvector-enabled instance). */
   DATABASE_URL: z.string().min(1),

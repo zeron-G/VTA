@@ -39,6 +39,7 @@ import {
 } from '@vta/shared';
 import type { SecretsProvider, CourseRole } from '@vta/shared';
 import { loadProfile } from '@vta/llm';
+import type { LlmProfileName } from '@vta/llm';
 
 // Load a local `.env` (if present) before reading process config. No-op when
 // the file is absent, so production deployments that inject real env still work.
@@ -105,7 +106,7 @@ interface Ctx {
   readonly db: Db;
   readonly secrets: SecretsProvider;
   /** Active LLM profile name (drives the `embed` role used during ingest). */
-  readonly llmProfile: 'dev' | 'prod';
+  readonly llmProfile: LlmProfileName;
 }
 
 /**

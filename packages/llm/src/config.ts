@@ -14,7 +14,7 @@
 import { ConfigError } from '@vta/shared';
 import type { ModelSpec, RoleMapping } from './roles.js';
 
-export type LlmProfileName = 'dev' | 'prod';
+export type LlmProfileName = 'dev' | 'prod' | 'openrouter';
 
 /**
  * Optional base URL for the DeepSeek (OpenAI-compatible) endpoint, injected
@@ -106,9 +106,62 @@ const PROD_PROFILE: RoleMapping = {
   },
 };
 
+/**
+ * OpenRouter profile: route EVERY model call through OpenRouter (one lab key,
+ * OpenAI-compatible gateway). Chat + embeddings are all proxied — the guard/
+ * injection judge included. Model ids are OpenRouter's namespaced form; the
+ * embedding model is the SAME `text-embedding-3-small` (1536 dims) as the OpenAI
+ * path, so existing stored chunk vectors remain compatible (no re-ingest).
+ *
+ * NOTE: OpenRouter does NOT proxy OpenAI's `/moderations` or Responses-API web
+ * search — those two remain on the OpenAI key (see `@vta/core` composition) and
+ * gracefully no-op / degrade if that key is absent.
+ */
+const OPENROUTER_ENDPOINT: string =
+  process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
+
+const OPENROUTER_PROFILE: RoleMapping = {
+  'agent.primary': {
+    provider: 'openai-compatible',
+    model: 'deepseek/deepseek-v4-flash',
+    auth: 'apiKey',
+    apiKeyName: 'openrouter.api-key',
+    endpoint: OPENROUTER_ENDPOINT,
+  },
+  'agent.fallback': {
+    provider: 'openai-compatible',
+    model: 'openai/gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openrouter.api-key',
+    endpoint: OPENROUTER_ENDPOINT,
+  },
+  embed: {
+    provider: 'openai-compatible',
+    model: 'openai/text-embedding-3-small',
+    auth: 'apiKey',
+    apiKeyName: 'openrouter.api-key',
+    endpoint: OPENROUTER_ENDPOINT,
+  },
+  rerank: {
+    provider: 'openai-compatible',
+    model: 'openai/gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openrouter.api-key',
+    endpoint: OPENROUTER_ENDPOINT,
+  },
+  'guard.judge': {
+    provider: 'openai-compatible',
+    model: 'openai/gpt-5.4-mini',
+    auth: 'apiKey',
+    apiKeyName: 'openrouter.api-key',
+    endpoint: OPENROUTER_ENDPOINT,
+  },
+};
+
 export const PROFILES: Record<LlmProfileName, RoleMapping> = {
   dev: DEV_PROFILE,
   prod: PROD_PROFILE,
+  openrouter: OPENROUTER_PROFILE,
 };
 
 /** Load a profile by name, throwing `ConfigError` for an unknown name. */
