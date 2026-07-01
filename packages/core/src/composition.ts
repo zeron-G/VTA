@@ -27,7 +27,7 @@ import {
 import type { SecretsProvider, Logger } from '@vta/shared';
 import { createLogger } from '@vta/shared';
 import type { RoleMapping } from '@vta/llm';
-import { ModelRouter, OpenAiWebSearch, OpenAiModerator } from '@vta/llm';
+import { ModelRouter, OpenRouterWebSearch } from '@vta/llm';
 import type { EmbeddingProvider } from '@vta/rag';
 import { RagRetriever } from '@vta/rag';
 import { createDefaultTools } from '@vta/tools';
@@ -47,7 +47,7 @@ import { loadCourseConfig } from '@vta/tenancy';
 import type { ResolvedCourseConfig } from '@vta/tenancy';
 
 import { routerJudge } from './llmJudge.js';
-import { routerInjectionDetector } from './guardrails.js';
+import { routerInjectionDetector, routerModerator } from './guardrails.js';
 import { TeachingService } from './teachingService.js';
 
 /**
@@ -110,14 +110,15 @@ export function createTeachingService(config: CoreConfig): TeachingService {
     logger: log,
   });
 
-  // --- Web search: OpenAI-hosted (reuses the same `openai.api-key`). The key is
-  //     resolved lazily on first use and the searcher cached, so construction
-  //     stays I/O-free. `@vta/tools` adds a `web_search` tool when this is given.
-  let webSearcher: OpenAiWebSearch | undefined;
-  const webSearch = async (query: string): ReturnType<OpenAiWebSearch['search']> => {
+  // --- Web search via OpenRouter's `:online` mechanism, using the SAME
+  //     `openrouter.api-key` as the rest of the model traffic (no OpenAI needed).
+  //     The searcher is built lazily on first use so construction stays I/O-free;
+  //     `@vta/tools` adds a `web_search` tool when this is given.
+  let webSearcher: OpenRouterWebSearch | undefined;
+  const webSearch = async (query: string): ReturnType<OpenRouterWebSearch['search']> => {
     if (webSearcher === undefined) {
-      const apiKey = await config.secrets.require('openai.api-key');
-      webSearcher = new OpenAiWebSearch({ apiKey });
+      const apiKey = await config.secrets.require('openrouter.api-key');
+      webSearcher = new OpenRouterWebSearch({ apiKey });
     }
     return webSearcher.search(query);
   };
@@ -140,20 +141,11 @@ export function createTeachingService(config: CoreConfig): TeachingService {
     pii: new RegexPiiRedactor(),
   });
 
-  // Egress: the content-boundary judge runs on `guard.judge` via the router; a
-  // content-safety moderator (OpenAI's hosted classifier, reusing `openai.api-key`)
-  // is a fail-open backstop. The OpenAI client is built lazily on first use so
-  // construction stays I/O-free; output PII uses the regex redactor.
-  let moderatorImpl: OpenAiModerator | undefined;
-  const moderator: Moderator = {
-    moderate: async (text: string) => {
-      if (moderatorImpl === undefined) {
-        const apiKey = await config.secrets.require('openai.api-key');
-        moderatorImpl = new OpenAiModerator({ credential: { kind: 'apiKey', apiKey } });
-      }
-      return moderatorImpl.moderate(text);
-    },
-  };
+  // Egress: the content-boundary judge and the content-safety moderator both run
+  // on the `guard.judge` role via the router (so they follow the active profile —
+  // OpenRouter today — with no provider-specific endpoint). Moderation is a
+  // fail-open backstop; output PII uses the regex redactor.
+  const moderator: Moderator = routerModerator(router);
   const egress = new EgressGovernor({
     pii: new RegexPiiRedactor(),
     judge: routerJudge(router),

@@ -13,7 +13,7 @@
  * degrades to the heuristic rather than blocking every request.
  */
 
-import type { InjectionDetector, InjectionResult } from '@vta/governance';
+import type { InjectionDetector, InjectionResult, Moderator, ModerationResult } from '@vta/governance';
 import type { ModelRouter } from '@vta/llm';
 
 const SYSTEM_PROMPT =
@@ -40,6 +40,36 @@ export function routerInjectionDetector(router: ModelRouter): InjectionDetector 
       return injection
         ? { injection: true, reason: 'llm injection classifier flagged the input' }
         : { injection: false };
+    },
+  };
+}
+
+const MODERATION_SYSTEM_PROMPT =
+  'You are a content-safety classifier for a university teaching assistant. Decide ' +
+  'whether the ANSWER contains disallowed content: hate/harassment, sexual content, ' +
+  'graphic violence, self-harm encouragement, or instructions for clearly illegal/' +
+  'dangerous acts. Ordinary academic content is safe. Answer with exactly "yes" ' +
+  '(disallowed) or "no" (safe) on the first line. When uncertain, answer "no".';
+
+/**
+ * Build a {@link Moderator} backed by the router's `guard.judge` role — a portable
+ * replacement for a provider-specific moderation endpoint (e.g. when routing
+ * everything through OpenRouter, which does not proxy OpenAI `/moderations`). It
+ * asks the model a single yes/no safety question about the candidate answer.
+ * Errors propagate; the egress moderation backstop is fail-open and records them.
+ */
+export function routerModerator(router: ModelRouter): Moderator {
+  return {
+    async moderate(text: string): Promise<ModerationResult> {
+      const result = await router.complete('guard.judge', {
+        messages: [
+          { role: 'system', content: MODERATION_SYSTEM_PROMPT },
+          { role: 'user', content: text },
+        ],
+      });
+      const firstLine = result.text.trim().split(/\r?\n/, 1)[0] ?? '';
+      const flagged = /^\s*(?:yes|y|true|1)\b/i.test(firstLine);
+      return flagged ? { flagged: true, categories: ['llm-flagged'] } : { flagged: false };
     },
   };
 }

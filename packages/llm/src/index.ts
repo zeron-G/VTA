@@ -47,9 +47,13 @@ export type { OpenAiEmbedderOptions } from './providers/openaiEmbedder.js';
 export { ModelRouter } from './router.js';
 export type { ModelRouterOptions } from './router.js';
 
-// OpenAI-hosted web search (a tool capability, not a chat role).
-export { OpenAiWebSearch } from './webSearch.js';
-export type { OpenAiWebSearchOptions, WebSearchResult } from './webSearch.js';
+// Web search (a tool capability, not a chat role): OpenAI-hosted or OpenRouter.
+export { OpenAiWebSearch, OpenRouterWebSearch } from './webSearch.js';
+export type {
+  OpenAiWebSearchOptions,
+  OpenRouterWebSearchOptions,
+  WebSearchResult,
+} from './webSearch.js';
 
 // OpenAI-hosted content moderation (an egress backstop, not a chat role).
 export { OpenAiModerator } from './providers/openaiModerator.js';
