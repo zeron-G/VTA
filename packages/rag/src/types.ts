@@ -61,4 +61,6 @@ export interface IngestStats {
   readonly materialsProcessed: number;
   readonly materialsChanged: number;
   readonly chunksWritten: number;
+  /** Stale materials removed because they no longer exist (or were unpublished) in Canvas. */
+  readonly materialsRemoved?: number;
 }

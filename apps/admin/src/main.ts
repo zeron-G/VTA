@@ -265,7 +265,8 @@ async function cmdCourseIngest(
   const stats = await ingestion.ingestCourse(course.id, course.canvasCourseId);
   process.stdout.write(
     `ingest complete: materialsProcessed=${stats.materialsProcessed} ` +
-      `materialsChanged=${stats.materialsChanged} chunksWritten=${stats.chunksWritten}\n`,
+      `materialsChanged=${stats.materialsChanged} chunksWritten=${stats.chunksWritten} ` +
+      `materialsRemoved=${stats.materialsRemoved ?? 0}\n`,
   );
 }
 

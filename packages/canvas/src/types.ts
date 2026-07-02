@@ -156,6 +156,10 @@ export interface CanvasFile {
   /** Time-limited download URL. NOTE: short-lived; do not persist as canonical. */
   readonly url?: string;
   readonly updated_at?: string;
+  /** `true` when the file is unpublished / locked from students. */
+  readonly locked?: boolean;
+  /** `true` when the file is hidden from students (not shown in Files). */
+  readonly hidden?: boolean;
 }
 
 /**

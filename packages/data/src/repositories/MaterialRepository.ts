@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { CourseId } from "@vta/shared";
 import type { Db } from "../client.js";
 import { materials, chunks } from "../schema/materials.js";
@@ -103,14 +103,21 @@ export class MaterialRepository {
   }
 
   /**
-   * Atomically replace ALL chunks of a material with a new set. Verifies the
-   * material belongs to `courseId` before deleting, and stamps every new chunk
-   * with the scoped `courseId`/`materialId`. Runs in a single transaction.
+   * Atomically replace ALL chunks of a material with a new set, and OPTIONALLY
+   * stamp the material's `contentHash` in the SAME transaction. Verifies the
+   * material belongs to `courseId` before mutating, and stamps every new chunk
+   * with the scoped `courseId`/`materialId`.
+   *
+   * Passing `contentHash` here (rather than at upsert time) is what makes change
+   * detection safe: the hash only advances once the chunks are successfully
+   * written, so a failed embed upstream never leaves a material marked "current"
+   * with stale/absent chunks (it stays dirty and is retried on the next sync).
    */
   async replaceChunks(
     courseId: CourseId,
     materialId: string,
     newChunks: readonly ChunkInput[],
+    contentHash?: string,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       // Confirm the material exists AND belongs to this course before mutating.
@@ -132,14 +139,51 @@ export class MaterialRepository {
           and(eq(chunks.materialId, materialId), eq(chunks.courseId, courseId)),
         );
 
-      if (newChunks.length === 0) return;
+      if (newChunks.length > 0) {
+        const rows: NewChunkRow[] = newChunks.map((c) => ({
+          ...c,
+          courseId,
+          materialId,
+        }));
+        await tx.insert(chunks).values(rows);
+      }
 
-      const rows: NewChunkRow[] = newChunks.map((c) => ({
-        ...c,
-        courseId,
-        materialId,
-      }));
-      await tx.insert(chunks).values(rows);
+      // Stamp the hash LAST, inside the same tx, so it is atomic with the chunk
+      // write. Scoped by courseId + id so it cannot touch another tenant's row.
+      if (contentHash !== undefined) {
+        await tx
+          .update(materials)
+          .set({ contentHash, updatedAt: new Date() })
+          .where(and(eq(materials.id, materialId), eq(materials.courseId, courseId)));
+      }
     });
+  }
+
+  /**
+   * List (id, externalId) for every material of a given `sourceType` in a
+   * course. Used by ingestion to reconcile: any stored canvas material whose
+   * externalId was NOT seen in a (clean) sync has been deleted upstream.
+   */
+  async listExternalIdsBySource(
+    courseId: CourseId,
+    sourceType: string,
+  ): Promise<Array<{ id: string; externalId: string | null }>> {
+    return this.db
+      .select({ id: materials.id, externalId: materials.externalId })
+      .from(materials)
+      .where(and(eq(materials.courseId, courseId), eq(materials.sourceType, sourceType)));
+  }
+
+  /**
+   * Delete materials by id, scoped to `courseId`; their chunks are removed via
+   * the ON DELETE CASCADE on `chunks.material_id`. Returns the number deleted.
+   */
+  async deleteByIds(courseId: CourseId, ids: readonly string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const deleted = await this.db
+      .delete(materials)
+      .where(and(eq(materials.courseId, courseId), inArray(materials.id, [...ids])))
+      .returning({ id: materials.id });
+    return deleted.length;
   }
 }

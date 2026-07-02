@@ -97,7 +97,10 @@ export class RagIngestor {
       );
     }
 
-    const normalized = await this.collectCanvasMaterials(courseId, canvasId);
+    const { materials: normalized, complete } = await this.collectCanvasMaterials(
+      courseId,
+      canvasId,
+    );
 
     let materialsProcessed = 0;
     let materialsChanged = 0;
@@ -112,11 +115,32 @@ export class RagIngestor {
       }
     }
 
+    // Reconcile deletions: any stored canvas material whose externalId was NOT
+    // seen this run has been removed OR unpublished upstream, so drop it (chunks
+    // cascade). Only do this on a CLEAN sync — if any fetch failed, `complete`
+    // is false and we skip, so a transient Canvas error can never wipe still-
+    // valid content (a genuinely-deleted item is then cleaned on the next clean
+    // sync). Uploads (sourceType 'upload') are never touched.
+    let materialsRemoved = 0;
+    if (complete) {
+      const seen = new Set(normalized.map((m) => m.externalId));
+      const stored = await this.materialRepo.listExternalIdsBySource(courseId, 'canvas');
+      const stale = stored
+        .filter((s) => s.externalId !== null && !seen.has(s.externalId))
+        .map((s) => s.id);
+      materialsRemoved = await this.materialRepo.deleteByIds(courseId, stale);
+    } else {
+      this.log.warn(
+        { courseId },
+        'canvas sync had fetch errors; skipping delete-reconcile to avoid removing still-valid materials',
+      );
+    }
+
     this.log.info(
-      { courseId, canvasCourseId, materialsProcessed, materialsChanged, chunksWritten },
+      { courseId, canvasCourseId, materialsProcessed, materialsChanged, chunksWritten, materialsRemoved },
       'canvas course ingestion complete',
     );
-    return { materialsProcessed, materialsChanged, chunksWritten };
+    return { materialsProcessed, materialsChanged, chunksWritten, materialsRemoved };
   }
 
   /**
@@ -161,21 +185,35 @@ export class RagIngestor {
   /**
    * Fetch every supported Canvas resource and normalize it. Page bodies require
    * a per-page fetch (the list endpoint omits the body), so we expand those.
+   *
+   * UNPUBLISHED CONTENT IS SKIPPED: pages/assignments/modules with
+   * `published === false`, and files that are `locked`/`hidden`, are not
+   * ingested — so not-yet-released material (future homework/exam keys) never
+   * becomes student-retrievable. (When a course later opts into
+   * `allowUnreleasedMaterial`, this is the single site that would gate the skip.)
+   *
+   * Returns `complete: false` if ANY fetch failed, so the caller skips the
+   * delete-reconcile pass (a partial sync must never delete still-valid content).
    */
   private async collectCanvasMaterials(
     courseId: CourseId,
     canvasId: number,
-  ): Promise<NormalizedMaterial[]> {
+  ): Promise<{ materials: NormalizedMaterial[]; complete: boolean }> {
     const out: NormalizedMaterial[] = [];
+    // Any fetch failure flips this; unpublished-SKIPS do NOT (they are intended
+    // and should let reconcile remove a now-unpublished material).
+    let hadError = false;
 
     // --- Pages: list gives metadata only; fetch each page for its body. -------
     const pageStubs = await this.canvas.listPages(canvasId);
     for (const stub of pageStubs) {
+      if (stub.published === false) continue;
       try {
         const full = await this.canvas.getPage(canvasId, stub.url);
+        if (full.published === false) continue;
         out.push(toNormalizedPage(full));
       } catch (cause) {
-        // A single unreadable page should not abort the whole sync.
+        hadError = true;
         this.log.warn(
           { courseId, pageUrl: stub.url, err: toError(cause).message },
           'skipping page that failed to fetch',
@@ -185,15 +223,21 @@ export class RagIngestor {
 
     // --- Assignments: descriptions are inlined on the list endpoint. ----------
     const assignments = await this.canvas.listAssignments(canvasId);
-    for (const a of assignments) out.push(toNormalizedAssignment(a));
+    for (const a of assignments) {
+      if (a.published === false) continue;
+      out.push(toNormalizedAssignment(a));
+    }
 
-    // --- Announcements. -------------------------------------------------------
+    // --- Announcements (discussion topics — no separate publish state). -------
     const announcements = await this.canvas.listAnnouncements(canvasId);
     for (const ann of announcements) out.push(toNormalizedAnnouncement(ann));
 
     // --- Modules (items inlined). ---------------------------------------------
     const modules = await this.canvas.listModules(canvasId);
-    for (const m of modules) out.push(toNormalizedModule(m));
+    for (const m of modules) {
+      if (m.published === false) continue;
+      out.push(toNormalizedModule(m));
+    }
 
     // --- Syllabus: needs the course object + the syllabus HTML. ---------------
     try {
@@ -203,6 +247,7 @@ export class RagIngestor {
       // Only index a syllabus that has actual content.
       if (syllabus.markdown.trim() !== '') out.push(syllabus);
     } catch (cause) {
+      hadError = true;
       this.log.warn(
         { courseId, err: toError(cause).message },
         'skipping syllabus that failed to fetch',
@@ -217,6 +262,7 @@ export class RagIngestor {
     try {
       const files = await this.canvas.listFiles(canvasId);
       for (const file of files) {
+        if (file.locked === true || file.hidden === true) continue; // unpublished/hidden
         if (
           !isExtractable({
             filename: file.filename,
@@ -235,6 +281,7 @@ export class RagIngestor {
           if (text.trim() === '') continue; // nothing extractable (e.g. scanned image PDF)
           out.push(toNormalizedFile(file, text));
         } catch (cause) {
+          hadError = true;
           this.log.warn(
             { courseId, fileId: file.id, err: toError(cause).message },
             'skipping file that failed to download/extract',
@@ -242,13 +289,14 @@ export class RagIngestor {
         }
       }
     } catch (cause) {
+      hadError = true;
       this.log.warn(
         { courseId, err: toError(cause).message },
         'skipping files listing that failed to fetch',
       );
     }
 
-    return out;
+    return { materials: out, complete: !hadError };
   }
 
   /**
@@ -272,13 +320,18 @@ export class RagIngestor {
     const changed =
       existing === undefined || existing.contentHash !== parts.contentHash;
 
+    // Upsert metadata now, but do NOT advance the contentHash yet when content
+    // changed: keep the row "dirty" (its old hash, or '' on first ingest) so that
+    // if embedding throws below, the material is NOT marked current and IS
+    // retried on the next sync. `replaceChunks` stamps the new hash in the same
+    // transaction as the chunk write, so the hash only advances once chunks land.
     const row: NewMaterialRow = {
       courseId,
       sourceType: parts.sourceType,
       externalId: parts.externalId,
       title: parts.title,
       kind: parts.kind,
-      contentHash: parts.contentHash,
+      contentHash: changed ? (existing?.contentHash ?? '') : parts.contentHash,
       ...(parts.uri !== undefined ? { uri: parts.uri } : {}),
     };
     const saved = await this.materialRepo.upsertMaterial(courseId, row);
@@ -291,9 +344,10 @@ export class RagIngestor {
       return { changed: false, chunksWritten: 0 };
     }
 
+    // Embed (may throw on network/rate-limit) BEFORE the hash is advanced.
     const chunkInputs = await this.buildChunkInputs(parts.markdown);
-    // Replace the material's chunks atomically with the freshly embedded set.
-    await this.materialRepo.replaceChunks(courseId, saved.id, chunkInputs);
+    // Replace chunks AND stamp the new contentHash atomically in one transaction.
+    await this.materialRepo.replaceChunks(courseId, saved.id, chunkInputs, parts.contentHash);
 
     return { changed: true, chunksWritten: chunkInputs.length };
   }
