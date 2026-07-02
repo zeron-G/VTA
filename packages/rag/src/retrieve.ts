@@ -33,6 +33,12 @@ export interface RagRetrieverDeps {
 export interface RetrieveOptions {
   /** Number of fused chunks to return. Default 8. */
   readonly k?: number;
+  /**
+   * Cosine-distance ceiling for the VECTOR arm: candidates with distance above
+   * this are dropped as too weak to be relevant. Keyword (exact-lexical) hits
+   * are never distance-filtered. Default {@link DEFAULT_MAX_DISTANCE}.
+   */
+  readonly maxDistance?: number;
 }
 
 /**
@@ -44,6 +50,16 @@ const RRF_K = 60;
 
 /** Default number of fused results to return. */
 const DEFAULT_K = 8;
+
+/**
+ * Default cosine-distance ceiling for the vector arm. pgvector cosine distance
+ * runs 0 (identical) .. 2 (opposite); for text-embedding-3-small, genuinely
+ * relevant course chunks typically sit well below ~0.6 while off-topic chunks
+ * sit above it. Filtering here prevents weak semantic matches from becoming
+ * SPURIOUS citations when the course has nothing actually relevant — in which
+ * case retrieval returns empty and the agent falls through to web search.
+ */
+const DEFAULT_MAX_DISTANCE = 0.6;
 
 /** A row from the keyword (full-text) search arm. */
 interface KeywordHit {
@@ -85,6 +101,10 @@ export class RagRetriever {
     opts: RetrieveOptions = {},
   ): Promise<RetrievalResult> {
     const k = normalizeK(opts.k);
+    const maxDistance =
+      typeof opts.maxDistance === 'number' && Number.isFinite(opts.maxDistance)
+        ? opts.maxDistance
+        : DEFAULT_MAX_DISTANCE;
     const trimmed = typeof query === 'string' ? query.trim() : '';
     if (trimmed === '') {
       return { chunks: [], citations: [] };
@@ -106,8 +126,14 @@ export class RagRetriever {
       this.keywordSearch(courseId, trimmed, candidateCount),
     ]);
 
+    // (3b) Relevance floor on the vector arm: drop candidates too far to be
+    // relevant, so a course with nothing on-topic yields NO spurious citations
+    // (and the agent then goes to web search). Keyword hits are exact-lexical
+    // matches and are kept as-is.
+    const relevantVectorHits = vectorHits.filter((h) => h.distance <= maxDistance);
+
     // (4) Fuse.
-    const fused = reciprocalRankFusion(vectorHits, keywordHits);
+    const fused = reciprocalRankFusion(relevantVectorHits, keywordHits);
 
     // (5) Top-k, then resolve human-readable material titles so citations show
     // real titles instead of opaque material UUIDs.
@@ -127,7 +153,9 @@ export class RagRetriever {
         courseId,
         k,
         vectorHits: vectorHits.length,
+        relevantVectorHits: relevantVectorHits.length,
         keywordHits: keywordHits.length,
+        maxDistance,
         returned: topChunks.length,
       },
       'hybrid retrieval complete',
@@ -148,11 +176,9 @@ export class RagRetriever {
    * Ranking uses `ts_rank` so the best lexical matches come first; we only need
    * the relative order for RRF, not the absolute score.
    *
-   * TODO(perf-migration): add a GIN index on
-   *   to_tsvector('english', content)
-   * (and an HNSW index on `embedding` for the vector arm) in a follow-up
-   * migration. Without the GIN index this query does a sequential scan per
-   * course — acceptable for small courses, but index it before scale.
+   * The matching GIN index on `to_tsvector('english', content)` (and the HNSW
+   * index on `embedding` for the vector arm) are created by `pnpm db:indexes`
+   * (packages/data/src/applyIndexes.ts), which must be run once after `db:push`.
    */
   private async keywordSearch(
     courseId: CourseId,

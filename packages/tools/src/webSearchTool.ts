@@ -47,11 +47,22 @@ export function createWebSearchTool(search: WebSearchFn): VtaTool<WebSearchArgs>
     parameters: webSearchParameters,
     async execute(args: WebSearchArgs, _ctx: ToolContext): Promise<ToolResult> {
       const result = await search(args.query);
-      const text =
-        result.text.trim() === ''
-          ? 'No web results were found for this query.'
-          : result.text;
-      return { content: text, data: result };
+      if (result.text.trim() === '' && result.citations.length === 0) {
+        return { content: 'No web results were found for this query.', data: result };
+      }
+      // Give the model an EXPLICIT, numbered source list with exact URLs so it
+      // can build accurate APA references and cite ONLY these real URLs — never
+      // invented ones. The verifier later cross-checks the answer's URLs against
+      // exactly this set (carried on `data.citations`).
+      const sourceLines = result.citations.map(
+        (c, i) => `  [${i + 1}] ${c.title}${c.locator !== undefined ? ` — ${c.locator}` : ''} (${c.sourceId})`,
+      );
+      const content =
+        result.text.trim() +
+        (sourceLines.length > 0
+          ? `\n\nWEB SOURCES (cite ONLY these exact URLs; do not invent others):\n${sourceLines.join('\n')}`
+          : '');
+      return { content, data: result };
     },
   };
 }

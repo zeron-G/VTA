@@ -32,6 +32,8 @@
 
 import type { ConversationTurn, InboundRequest, OutboundReply, Logger } from '@vta/shared';
 import { createLogger, toError } from '@vta/shared';
+
+import { verifyCitations } from './citationCheck.js';
 import type { ResolvedCourseConfig } from '@vta/tenancy';
 import type { GovernanceContext, IngressGovernor, EgressGovernor } from '@vta/governance';
 import type { CourseAgent, AgentOutput } from '@vta/agent';
@@ -149,10 +151,29 @@ export class TeachingService {
       });
       collected.push(...agentOutput.governanceVerdicts);
 
+      // (3b) CITATION VERIFICATION — deterministically strip any web URL the
+      // model cited that is NOT one of the real sources the tools returned, so a
+      // fabricated link can never reach a student. Runs before egress inspects
+      // the text.
+      const cited = verifyCitations(agentOutput.text, agentOutput.citations);
+      if (cited.fabricatedCount > 0) {
+        this.log.warn(
+          { requestId: request.id, fabricated: cited.fabricatedCount },
+          'stripped unverifiable citation URL(s) from the answer',
+        );
+        collected.push({
+          stage: 'egress',
+          check: 'citation.fabricated',
+          decision: 'flag',
+          reason: `removed ${cited.fabricatedCount} unverifiable source link(s) not returned by any tool`,
+          at: new Date().toISOString(),
+        });
+      }
+
       // (4) EGRESS — the MANDATORY gate. This is the only place an answer becomes
       // deliverable. The reply text/status/citations come from the decision,
       // NEVER from the raw agent output.
-      const egressDecision = await this.egress.inspect(agentOutput.text, govContext, {
+      const egressDecision = await this.egress.inspect(cited.text, govContext, {
         citations: agentOutput.citations,
       });
       collected.push(...egressDecision.verdicts);

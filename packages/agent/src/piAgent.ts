@@ -32,12 +32,6 @@ import { findTool, toLlmTools } from './toolBridge.js';
 /** Hard upper bound on tool-calling rounds. The loop can never exceed this. */
 const MAX_ITERATIONS = 6;
 
-/**
- * The name of the retrieval tool whose results carry grounding citations. Kept
- * as a constant matching `@vta/tools`' `createRetrieveTool` so we capture
- * citations from the right tool without coupling to its module internals.
- */
-const RETRIEVE_TOOL_NAME = 'retrieve';
 
 /** Safe reply when the loop is bounded out before the model produced an answer. */
 const STOP_MESSAGE =
@@ -177,11 +171,13 @@ export class PiAgent implements CourseAgent {
           const toolResult: ToolResult = await tool.execute(parsed.data, toolCtx);
           messages.push({ role: 'tool', toolCallId: tc.id, content: toolResult.content });
 
-          // Capture grounding citations from the retrieve tool's structured data.
-          if (tc.name === RETRIEVE_TOOL_NAME) {
-            for (const citation of extractCitations(toolResult.data)) {
-              citationAccumulator.push(citation);
-            }
+          // Capture grounding citations from ANY tool that returns them: the
+          // retrieve tool yields course-material citations, web_search yields web
+          // source citations (title + URL). Capturing both lets web-sourced
+          // answers be cited AND lets the citation verifier check the answer's
+          // URLs against real sources — not just course material.
+          for (const citation of extractCitations(toolResult.data)) {
+            citationAccumulator.push(citation);
           }
 
           toolInvocations.push({ name: tc.name, allowed: true, ok: true });
