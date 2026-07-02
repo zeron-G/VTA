@@ -47,6 +47,26 @@ describe('RegexPiiRedactor', () => {
     expect(redacted).toContain('chapter12');
     expect(redacted).not.toContain('[REDACTED_JHED]');
   });
+
+  it('does NOT redact course codes / standards (MGT101, ECON200, IFRS16)', async () => {
+    const text = 'Is MGT101 a prereq for ECON200, and how does IFRS16 treat leases?';
+    const { redacted, foundCount } = await redactor.redact(text);
+    expect(redacted).toBe(text); // uppercase codes are not JHED logins
+    expect(foundCount).toBe(0);
+    expect(redacted).not.toContain('[REDACTED_JHED]');
+  });
+
+  it('does NOT redact a lowercase subject-code token like "cs101"', async () => {
+    const text = 'Where are the cs101 lecture slides?';
+    const { redacted } = await redactor.redact(text);
+    expect(redacted).toBe(text);
+  });
+
+  it('STILL redacts a lowercase JHED-style login (jsmith12)', async () => {
+    const { redacted } = await redactor.redact('Contact the TA jsmith12 for help.');
+    expect(redacted).toContain('[REDACTED_JHED]');
+    expect(redacted).not.toContain('jsmith12');
+  });
 });
 
 describe('HeuristicInjectionDetector', () => {

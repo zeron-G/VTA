@@ -145,21 +145,29 @@ async function cmdCourseAdd(ctx: Ctx, flags: Record<string, string>): Promise<vo
     ...(orgId !== undefined && orgId !== '' ? { orgId } : {}),
   });
 
-  // Seed config with safe governance defaults and an empty channel map. The
-  // tenancy `DEFAULT_CONTENT_RULES` is structurally assignable to the stored
-  // (permissive) content-rules column.
-  await configRepo.upsert(course.id, {
-    courseId: course.id,
-    channelMap: {},
-    // The stored column is intentionally permissive (jsonb / index-signature);
-    // the tenancy DEFAULT_CONTENT_RULES is the authoritative shape we persist.
-    contentRules: DEFAULT_CONTENT_RULES as unknown as StoredContentRules,
-  });
+  // Seed config with safe governance defaults ONLY when this course has none.
+  // Re-running course:add to refresh a course's name/canvas-id must NOT wipe an
+  // existing course's channel map or content rules (that was a destructive
+  // footgun); preserve them on refresh.
+  const existingConfig = await configRepo.get(course.id);
+  let configNote: string;
+  if (existingConfig === undefined) {
+    await configRepo.upsert(course.id, {
+      courseId: course.id,
+      channelMap: {},
+      // The stored column is intentionally permissive (jsonb / index-signature);
+      // the tenancy DEFAULT_CONTENT_RULES is the authoritative shape we persist.
+      contentRules: DEFAULT_CONTENT_RULES as unknown as StoredContentRules,
+    });
+    configNote = 'seeded default config';
+  } else {
+    configNote = 'existing config preserved';
+  }
 
   process.stdout.write(
     `added course "${course.slug}" (${course.name}) id=${course.id} canvas=${String(
       course.canvasCourseId,
-    )}\n`,
+    )} (${configNote})\n`,
   );
 }
 

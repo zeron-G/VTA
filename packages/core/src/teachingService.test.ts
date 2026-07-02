@@ -26,7 +26,7 @@ import {
   DEFAULT_RATE_LIMIT,
   DEFAULT_LOCALE_CONFIG,
 } from '@vta/tenancy';
-import type { ContentRules, ResolvedCourseConfig } from '@vta/tenancy';
+import type { ContentRules, ResolvedCourseConfig, LocaleConfig } from '@vta/tenancy';
 import type { InboundRequest, Citation, ConversationTurn } from '@vta/shared';
 import type { CourseAgent, AgentOutput, AgentInput } from '@vta/agent';
 import type { AuditService, AuditEntry } from '@vta/audit';
@@ -34,13 +34,17 @@ import type { AuditService, AuditEntry } from '@vta/audit';
 import { TeachingService } from './teachingService.js';
 import type { TeachingServiceDeps } from './teachingService.js';
 
-function makeConfig(courseId: string, rules: Partial<ContentRules> = {}): ResolvedCourseConfig {
+function makeConfig(
+  courseId: string,
+  rules: Partial<ContentRules> = {},
+  locales: LocaleConfig = DEFAULT_LOCALE_CONFIG,
+): ResolvedCourseConfig {
   return {
     courseId,
     channelMap: {},
     contentRules: { ...DEFAULT_CONTENT_RULES, ...rules },
     rateLimit: DEFAULT_RATE_LIMIT,
-    locales: DEFAULT_LOCALE_CONFIG,
+    locales,
   };
 }
 
@@ -67,6 +71,7 @@ interface Harness {
 function makeService(opts: {
   agentOutput: AgentOutput;
   rules?: Partial<ContentRules>;
+  locales?: LocaleConfig;
 }): Harness {
   const audited: AuditEntry[] = [];
   const agentCalls = { count: 0 };
@@ -87,7 +92,8 @@ function makeService(opts: {
   } as unknown as AuditService;
 
   const deps: TeachingServiceDeps = {
-    loadCourseConfig: (courseId: string) => Promise.resolve(makeConfig(courseId, opts.rules)),
+    loadCourseConfig: (courseId: string) =>
+      Promise.resolve(makeConfig(courseId, opts.rules, opts.locales)),
     ingress: new IngressGovernor({
       injection: new HeuristicInjectionDetector(),
       pii: new RegexPiiRedactor(),
@@ -174,6 +180,21 @@ describe('TeachingService pipeline', () => {
     expect(passed[0]?.content).not.toContain('student@uni.edu');
     expect(passed[0]?.content).toContain('[REDACTED_EMAIL]');
     expect(passed[1]).toEqual({ role: 'assistant', content: 'Sure — what would you like to know?' });
+  });
+
+  it('forces the course default language when mirroring is disabled', async () => {
+    const { service, lastAgentInput } = makeService({
+      agentOutput: groundedAnswer,
+      locales: { default: 'fr', mirrorStudentLanguage: false },
+    });
+    await service.handle(makeRequest('question'));
+    expect(lastAgentInput.value?.locale).toBe('fr');
+  });
+
+  it('leaves locale unset (mirror written language) by default', async () => {
+    const { service, lastAgentInput } = makeService({ agentOutput: groundedAnswer });
+    await service.handle(makeRequest('question'));
+    expect(lastAgentInput.value?.locale).toBeUndefined();
   });
 
   it('bounds history to the most recent turns', async () => {

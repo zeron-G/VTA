@@ -135,57 +135,99 @@ export function makeMessageHandler(
 }
 
 /**
- * Reconstruct recent conversation turns from the messages already in this
- * thread, oldest-first, EXCLUDING the current message. Our own bot's messages
- * become `assistant` turns; human messages become `user` turns; other bots and
- * empty/embeds-only messages are skipped. A fetch failure yields no history (the
- * pipeline still answers, just without context). Core bounds + PII-redacts this.
+ * Reconstruct recent conversation turns from this thread, oldest-first,
+ * EXCLUDING the current message. Our own bot's messages become `assistant`
+ * turns; human messages become `user` turns; other bots and empty messages are
+ * skipped. Two fidelity details matter:
+ *   - The thread STARTER (the original question that opened the thread) lives in
+ *     the parent channel and is NOT returned by messages.fetch, so we fetch it
+ *     explicitly and prepend it.
+ *   - A long bot reply is delivered as several 2000-char messages; we MERGE
+ *     consecutive same-role messages so it reads as one turn, not many.
+ * A fetch failure just yields less history. Core bounds + PII-redacts all of it.
  */
 async function fetchThreadHistory(
   message: Message,
   log: MessageHandlerDeps['log'],
 ): Promise<ConversationTurn[]> {
   if (!message.channel.isThread()) return [];
+  const thread = message.channel;
   const botId = message.client.user?.id;
+  const isOwnBot = (m: Message): boolean => botId !== undefined && m.author.id === botId;
+  const raw: ConversationTurn[] = [];
+
+  // Prepend the thread starter — the original question — from the parent channel.
   try {
-    const fetched = await message.channel.messages.fetch({
+    const starter = await thread.fetchStarterMessage();
+    if (starter !== null && starter.id !== message.id) {
+      const content = starter.content.trim();
+      if (content !== '') {
+        if (!starter.author.bot) raw.push({ role: 'user', content });
+        else if (isOwnBot(starter)) raw.push({ role: 'assistant', content });
+      }
+    }
+  } catch {
+    // The starter may be deleted/unavailable; proceed with what we have.
+  }
+
+  try {
+    const fetched = await thread.messages.fetch({
       limit: HISTORY_FETCH_LIMIT,
       before: message.id,
     });
     // `fetch` returns newest-first; reverse to chronological order.
-    const turns: ConversationTurn[] = [];
     for (const m of [...fetched.values()].reverse()) {
       const content = m.content.trim();
       if (content === '') continue;
       if (m.author.bot) {
-        // Only OUR bot's posts are assistant turns; ignore any other bots.
-        if (botId !== undefined && m.author.id === botId) {
-          turns.push({ role: 'assistant', content });
-        }
-        continue;
+        if (isOwnBot(m)) raw.push({ role: 'assistant', content });
+        continue; // ignore other bots
       }
-      turns.push({ role: 'user', content });
+      raw.push({ role: 'user', content });
     }
-    return turns;
   } catch (err) {
     log.warn(
       { err: toError(err).message, channelId: message.channelId },
-      'could not fetch thread history; answering without it',
+      'could not fetch thread history; answering with what was available',
     );
-    return [];
   }
+
+  return mergeConsecutiveTurns(raw);
+}
+
+/** Collapse consecutive same-role turns into one (e.g. a chunked multi-message bot reply). */
+function mergeConsecutiveTurns(turns: readonly ConversationTurn[]): ConversationTurn[] {
+  const out: ConversationTurn[] = [];
+  for (const turn of turns) {
+    const last = out[out.length - 1];
+    if (last !== undefined && last.role === turn.role) {
+      out[out.length - 1] = { role: last.role, content: `${last.content}\n${turn.content}` };
+    } else {
+      out.push(turn);
+    }
+  }
+  return out;
 }
 
 /**
  * Derive a short, human-readable thread title from the author and their
  * question, e.g. `ada — How do I submit assignment 3?`. Trimmed to Discord's
- * thread-name budget.
+ * thread-name budget. The question is PII-scrubbed (emails / long digit runs)
+ * so a thread NAME — which is not covered by the governed reply's egress
+ * redaction — cannot leak a student's contact info.
  */
 function buildThreadTitle(message: Message): string {
   const author = message.author.username;
-  const question = message.content.replace(/\s+/g, ' ').trim();
+  const question = scrubTitle(message.content.replace(/\s+/g, ' ').trim());
   const raw = question === '' ? author : `${author} — ${question}`;
   return raw.length > THREAD_TITLE_MAX ? `${raw.slice(0, THREAD_TITLE_MAX - 1)}…` : raw;
+}
+
+/** Remove the highest-risk PII (emails, long digit runs) from a thread title. */
+function scrubTitle(text: string): string {
+  return text
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email]')
+    .replace(/\b\d[\d\s.-]{5,}\d\b/g, '[number]');
 }
 
 /**

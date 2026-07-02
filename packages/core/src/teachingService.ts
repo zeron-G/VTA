@@ -143,10 +143,17 @@ export class TeachingService {
       // Prior conversation turns (if any) are PII-redacted here before the model
       // sees them, mirroring the ingress redaction applied to the live question.
       const history = await this.redactHistory(request.history);
+      // Honor the course's locale policy: by default mirror the student's written
+      // language (leave locale unset — the agent prompt mirrors it); if the course
+      // turned mirroring OFF, force its configured default language. An explicit
+      // per-request locale always wins.
+      const locale =
+        request.locale ??
+        (config.locales.mirrorStudentLanguage ? undefined : config.locales.default);
       const agentOutput: AgentOutput = await this.agent.answer({
         govContext,
         question: redactedText,
-        ...(request.locale !== undefined ? { locale: request.locale } : {}),
+        ...(locale !== undefined ? { locale } : {}),
         ...(history.length > 0 ? { history } : {}),
       });
       collected.push(...agentOutput.governanceVerdicts);

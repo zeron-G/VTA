@@ -62,31 +62,49 @@ export class IngressGovernor {
   /**
    * Inspect untrusted inbound text.
    *
-   * Order:
-   *   1. Injection detection. On a positive detection -> block. On a THROWN
-   *      error -> block (default-deny) + `flag` verdict.
-   *   2. PII redaction of the allowed text. On a THROWN error -> block +
-   *      `flag` verdict (we refuse rather than risk forwarding raw PII).
+   * Order (PII redaction FIRST — load-bearing for privacy):
+   *   1. PII redaction. On a THROWN error -> block + `flag` (refuse rather than
+   *      risk forwarding raw PII). Runs first so that NOTHING downstream —
+   *      including the LLM-backed injection classifier in step 2 — ever sees raw
+   *      PII (it would otherwise be sent to the external model before redaction).
+   *   2. Injection detection over the REDACTED text. Injection signals are about
+   *      instructions, not PII, so redaction does not weaken detection. On a
+   *      positive detection -> block; on a THROWN error -> block (default-deny).
    */
   // `_ctx` is reserved for future per-course injection sensitivity / rules.
   async inspect(text: string, _ctx: GovernanceContext): Promise<IngressDecision> {
     const verdicts: GovernanceVerdict[] = [];
 
-    // (1) Prompt-injection / jailbreak detection (fail-safe).
+    // (1) Redact PII FIRST, before any model (incl. the injection classifier) sees it.
+    let redacted: string;
     try {
-      const result = await this.injection.detect(text);
+      const result = await this.pii.redact(text);
+      redacted = result.redacted;
+      verdicts.push(
+        makeVerdict(
+          STAGE,
+          'pii.ingress',
+          result.foundCount > 0 ? 'flag' : 'allow',
+          result.foundCount > 0 ? `redacted ${result.foundCount} PII span(s) from input` : undefined,
+        ),
+      );
+    } catch (err) {
+      // FAIL-SAFE: cannot guarantee redaction -> do not forward raw text.
+      const reason = `PII redactor error (blocking to avoid leaking raw input): ${toError(err).message}`;
+      verdicts.push(makeVerdict(STAGE, 'pii.ingress', 'flag', reason));
+      return { allow: false, redactedText: '', refusal: INGRESS_REFUSAL, verdicts };
+    }
+
+    // (2) Prompt-injection / jailbreak detection over the REDACTED text (fail-safe).
+    try {
+      const result = await this.injection.detect(redacted);
       if (result.injection) {
         // A swapped detector's `reason` could echo user text; redact it before it
         // lands in the FERPA audit log (the audit redaction invariant extends to
         // verdict reason strings).
         const reason = await this.safeReason(result.reason);
         verdicts.push(makeVerdict(STAGE, 'injection', 'block', reason));
-        return {
-          allow: false,
-          redactedText: '',
-          refusal: INGRESS_REFUSAL,
-          verdicts,
-        };
+        return { allow: false, redactedText: '', refusal: INGRESS_REFUSAL, verdicts };
       }
       // Clean input: record an explicit allow so the audit trail is complete.
       verdicts.push(makeVerdict(STAGE, 'injection', 'allow'));
@@ -94,37 +112,10 @@ export class IngressGovernor {
       // FAIL-SAFE: a detector failure must default-deny, not silently pass.
       const reason = `injection detector error (default-deny): ${toError(err).message}`;
       verdicts.push(makeVerdict(STAGE, 'injection', 'flag', reason));
-      return {
-        allow: false,
-        redactedText: '',
-        refusal: INGRESS_REFUSAL,
-        verdicts,
-      };
+      return { allow: false, redactedText: '', refusal: INGRESS_REFUSAL, verdicts };
     }
 
-    // (2) Redact PII from the allowed text before it reaches the model (fail-safe).
-    try {
-      const { redacted, foundCount } = await this.pii.redact(text);
-      verdicts.push(
-        makeVerdict(
-          STAGE,
-          'pii.ingress',
-          foundCount > 0 ? 'flag' : 'allow',
-          foundCount > 0 ? `redacted ${foundCount} PII span(s) from input` : undefined,
-        ),
-      );
-      return { allow: true, redactedText: redacted, verdicts };
-    } catch (err) {
-      // FAIL-SAFE: cannot guarantee redaction -> do not forward raw text.
-      const reason = `PII redactor error (blocking to avoid leaking raw input): ${toError(err).message}`;
-      verdicts.push(makeVerdict(STAGE, 'pii.ingress', 'flag', reason));
-      return {
-        allow: false,
-        redactedText: '',
-        refusal: INGRESS_REFUSAL,
-        verdicts,
-      };
-    }
+    return { allow: true, redactedText: redacted, verdicts };
   }
 
   /**

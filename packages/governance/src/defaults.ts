@@ -174,11 +174,18 @@ interface PiiRule {
  * this heuristic.)
  */
 const JHED_FALSE_POSITIVE_PREFIXES: ReadonlySet<string> = new Set([
+  // Structural course vocabulary.
   'chapter', 'chap', 'ch', 'figure', 'fig', 'section', 'sec', 'lab', 'problem',
   'exercise', 'ex', 'module', 'mod', 'week', 'page', 'pg', 'slide', 'table',
   'tbl', 'part', 'step', 'unit', 'eq', 'question', 'q', 'answer', 'version', 'v',
   'vol', 'appendix', 'quiz', 'lecture', 'lec', 'note', 'notes', 'assignment',
   'hw', 'pset', 'day', 'room', 'fall', 'spring', 'summer', 'winter',
+  // Common (lowercase) subject / course-code and standards prefixes, so tokens
+  // like "cs101" or "econ200" or "ifrs16" are not mistaken for a JHED login.
+  'cs', 'econ', 'mgt', 'mgmt', 'mba', 'bus', 'ba', 'ib', 'math', 'stat', 'stats',
+  'acct', 'acc', 'fin', 'mkt', 'mktg', 'ops', 'orgn', 'bio', 'chem', 'phys',
+  'hist', 'psyc', 'psych', 'engl', 'phil', 'soc', 'poli', 'ee', 'me', 'ense',
+  'ifrs', 'gaap', 'ias', 'iso', 'sfas', 'faq', 'p', 'fig', 'tbl',
 ]);
 
 /** True when a JHED-shaped token is really a common course word, e.g. "chapter12". */
@@ -219,9 +226,13 @@ const PII_RULES: readonly PiiRule[] = [
   },
   // North-American phone, compact: 10 digits, or 11 starting with 1.
   { pattern: /\b1?\d{10}\b/g, placeholder: '[REDACTED_PHONE]' },
-  // JHED-style login id: letters + digits (jsmith42), skipping common course words.
+  // JHED-style login id: LOWERCASE letters + digits (jsmith42). Case-sensitive on
+  // purpose: real JHED logins are lowercase, whereas course codes / standards are
+  // typically upper/mixed case (MGT101, ECON200, IFRS16), so dropping the `i`
+  // flag alone stops the most common false positives. The skip list catches
+  // lowercase course vocabulary ("chapter12", "cs101"). (Presidio NER later.)
   {
-    pattern: /\b[a-z]{2,8}\d{1,4}\b/gi,
+    pattern: /\b[a-z]{2,8}\d{1,4}\b/g,
     placeholder: '[REDACTED_JHED]',
     shouldRedact: (m) => !isJhedFalsePositive(m),
   },
